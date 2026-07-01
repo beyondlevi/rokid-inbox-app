@@ -34,6 +34,7 @@ flowchart LR
       GH[GitHub]
     end
     STT[Whisper STT]
+    AI[OpenAI image/file describer]
     SRV[Transport server]
   end
   Net[("Channel APIs / bridges")]
@@ -42,6 +43,7 @@ flowchart LR
   GB <-->|"CXR / BLE / SPP + handshake"| SRV
   SRV --- Ctl --- Agg --- ch --- Net
   Mic -.stream PCM.-> SRV -.WAV.-> STT --- Net
+  Ctl -.media.-> AI --- Net
   Cfg --- ch
 ```
 
@@ -51,11 +53,13 @@ flowchart LR
 - `InboxSettingsActivity` — add/remove inboxes and set the OpenAI key.
 - `InboxPhoneService` — foreground service keeping the runtime alive.
 - `InboxGraph` — wiring: config store, channel services, Whisper, controller, server.
-- `InboxController` — handles every glasses request (inbox, chat, voice, send, react, media).
+- `InboxController` — handles every glasses request (inbox, chat, voice, send, react, media, AI descriptions).
 - `InboxConfigStore` — credentials in `EncryptedSharedPreferences`.
 - `transport/InboxTransportServer` — Bluetooth SPP server + versioned handshake.
 - `channels/*` — one `ChannelService` per integration + `InboxAggregator`.
 - `voice/WhisperClient`, `voice/Wav` — PCM→WAV + OpenAI Whisper transcription.
+- `ai/AiDescriber` — OpenAI image (vision) + file (Files + Responses) descriptions;
+  reuses the same OpenAI key as Whisper.
 
 ## Glasses components
 
@@ -86,8 +90,9 @@ Phone → glasses: `InboxSnapshot`, `ChatSnapshot`, `SearchResults`,
 
 - `ChannelKind` = `WHATSAPP | TELEGRAM | GMAIL | GITHUB`
 - `Chat(channel, boxId, id, name, type, unreadCount, lastMessageDate, boxLabel)`
-- `Message(id, text, media, date, isOutgoing, senderName, durationSec)`
+- `Message(id, text, media, date, isOutgoing, senderName, durationSec, fileName)`
   - `media` is a tag like `[photo]`, `[voice]`, `[audio]`, `[video]`, `[file]`.
+  - `fileName` carries a document's original name (used for AI file descriptions).
 - `ChatType` = `USER | GROUP | CHANNEL`
 
 ## Voice reply flow
@@ -100,6 +105,15 @@ Phone → glasses: `InboxSnapshot`, `ChatSnapshot`, `SearchResults`,
 
 Voice search works the same way but the transcription is used to filter chats by
 name (`SearchResults`) instead of replying.
+
+## AI description flow
+
+1. On a `[photo]`/`[sticker]`/`[file]` message you pick **Descrever (IA)**.
+2. The glasses send `RequestDescription(boxId, chatId, messageId, isImage, fileName)`.
+3. The phone downloads the media via the channel's `fetchMedia`, then `ai/AiDescriber`
+   calls OpenAI — vision (Chat Completions) for images, or Files + Responses
+   (code-interpreter) for files — and replies with `DescriptionResult(text)`.
+4. The glasses show the description in a scrollable reader.
 
 ## More
 

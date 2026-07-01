@@ -1,0 +1,118 @@
+<resources>
+    <string name="app_name">Rokid Inbox</string>
+
+    <!-- Shared hints -->
+    <string name="hint_nav_open_back">Swipe: navegar · Tap: abrir · 2x: voltar</string>
+    <string name="hint_nav_open_exit">Swipe: navegar · Tap: abrir · 2x: sair</string>
+    <string name="hint_nav_open_menu">Swipe: navegar · Tap: abrir · 2x: menu</string>
+    <string name="hint_back">2x: voltar</string>
+    <string name="hint_exit">2x: sair</string>
+    <string name="connecting_default">Procurando o telefone via Bluetooth…</string>
+    <string name="hint_menu_exit">2x: menu</string>
+    <string name="hint_tap_or_back">Tap ou 2x: voltar</string>
+    <string name="wait">Aguarde…</string>
+    <string name="loading_fmt">%1$s  %2$s…</string>
+
+    <!-- Connecting / inbox -->
+    <string name="hdr_connecting">conectando</string>
+    <string name="hdr_menu">Menu</string>
+    <string name="menu_row">» Menu / Buscar</string>
+    <string name="filter_all">Caixa</string>
+    <string name="filter_unread">Não lidas</string>
+    <string name="menu_search">Buscar</string>
+    <string name="menu_inbox_all">Inbox geral</string>
+    <string name="menu_unread">Não lidas</string>
+    <string name="load_loading">Carregando</string>
+
+    <!-- Search -->
+    <string name="hdr_search">Busca</string>
+    <string name="search_recording_body">● Gravando…\n\nDiga o nome do contato.</string>
+    <string name="hint_search">Tap: buscar · 2x: cancelar</string>
+    <string name="search_none">(nenhum contato encontrado)</string>
+    <string name="search_ctx_fmt">Busca · %1$d</string>
+
+    <!-- Conversation -->
+    <string name="conv_empty">(sem mensagens)</string>
+    <string name="hint_reply_back">Tap: responder · 2x: voltar</string>
+    <string name="conv_loading_suffix"> · carregando</string>
+    <string name="conv_ctx_fmt"> · %1$d/%2$d</string>
+    <string name="load_messages">Carregando mensagens</string>
+    <string name="loading_messages_body">Carregando mensagens…</string>
+
+    <!-- Actions -->
+    <string name="hdr_actions">ações</string>
+    <string name="hdr_react">reagir</string>
+    <string name="hdr_reply">responder</string>
+    <string name="act_reply">Responder</string>
+    <string name="act_react">Reagir</string>
+    <string name="act_play_audio">Tocar áudio</string>
+    <string name="act_describe">Descrever (IA)</string>
+    <string name="reply_voice">Voz</string>
+    <string name="reply_quick">Mensagens rápidas</string>
+    <string name="hint_react">Swipe: navegar · Tap: reagir · 2x: voltar</string>
+
+    <!-- Emoji reactions -->
+    <string name="emoji_like">Curtir</string>
+    <string name="emoji_love">Amei</string>
+    <string name="emoji_haha">Haha</string>
+    <string name="emoji_wow">Uau</string>
+    <string name="emoji_sad">Triste</string>
+    <string name="emoji_thanks">Obrigado</string>
+    <string name="react_row_fmt">%1$s  %2$s</string>
+
+    <!-- Voice -->
+    <string name="hdr_voice">voz</string>
+    <string name="voice_idle_body">Mensagem de voz\n\nTap para gravar.</string>
+    <string name="hint_record_back">Tap: gravar · 2x: voltar</string>
+    <string name="recording_body">● Gravando…\n\nTap para parar e enviar.</string>
+    <string name="hint_stop_cancel">Tap: parar · 2x: cancelar</string>
+    <string name="load_transcribing">Transcrevendo</string>
+    <string name="load_sending">Enviando</string>
+
+    <!-- Preview -->
+    <string name="preview_body_fmt">Transcrição (%1$ds):\n\"%2$s\"%3$s</string>
+    <string name="preview_quoted_suffix">\n(respondendo à mensagem selecionada)</string>
+    <string name="preview_empty">(transcrição vazia)</string>
+    <string name="preview_send_text">Enviar texto transcrito</string>
+    <string name="preview_send_audio">Enviar áudio original</string>
+    <string name="hint_preview">Swipe: escolher · Tap: enviar · 2x: descartar</string>
+
+    <!-- Photo / detail / AI description -->
+    <string name="hdr_photo">foto</string>
+    <string name="img_unavailable">Imagem indisponível</string>
+    <string name="hint_photo_actions">Tap: ações · 2x: voltar</string>
+    <string name="hint_scroll_actions">Swipe: rolar · Tap: ações · 2x: voltar</string>
+    <string name="load_image">Carregando imagem</string>
+    <string name="hdr_description">descrição IA</string>
+    <string name="load_describing">Descrevendo (IA)</string>
+    <string name="desc_empty">(sem descrição)</string>
+    <string name="desc_error_fmt">Erro: %1$s</string>
+    <string name="hint_scroll_back">Swipe: rolar · 2x: voltar</string>
+
+    <!-- Quick messages -->
+    <string name="hdr_quick">rápidas</string>
+    <string name="quick_loading">Carregando mensagens rápidas…</string>
+    <string name="hint_quick">Swipe: navegar · Tap: enviar · 2x: voltar</string>
+
+    <!-- Feedback -->
+    <string name="hdr_done">pronto</string>
+    <string name="sent_text">✓ Texto enviado</string>
+    <string name="sent_audio">✓ Áudio enviado</string>
+    <string name="send_error_fmt">Erro ao enviar: %1$s</string>
+
+    <!-- Message bodies -->
+    <string name="msg_voice_fmt">[voz %1$s]  (toque em Tocar áudio)</string>
+    <string name="msg_file_fmt">[arquivo: %1$s]</string>
+    <string name="msg_no_content">(sem conteúdo)</string>
+    <string name="who_me">Eu</string>
+    <string name="who_unknown">?</string>
+
+    <!-- Mic -->
+    <string name="mic_unavailable">Microfone indisponível nos óculos.</string>
+
+    <!-- HUD placeholders -->
+    <string name="hud_empty">(vazio)</string>
+    <string name="hud_no_messages">(sem mensagens)</string>
+    <string name="hud_older">↑ mais antigas</string>
+    <string name="hud_newer">↓ mais recentes</string>
+</resources>

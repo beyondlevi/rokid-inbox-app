@@ -3,12 +3,18 @@ package com.rokid.inbox.phone
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.content.Context
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.rokid.inbox.contracts.LocaleManager
 
 /** Foreground service that keeps the Inbox transport + channels alive. */
 class InboxPhoneService : Service() {
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.wrap(newBase))
+    }
+
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()

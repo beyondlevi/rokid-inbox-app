@@ -1,14 +1,17 @@
 package com.rokid.inbox.phone
 
+import android.content.Context
 import android.util.Base64
 import android.util.Log
 import com.rokid.inbox.contracts.Chat
 import com.rokid.inbox.contracts.ChannelKind
 import com.rokid.inbox.contracts.GlassesToPhoneMessage
+import com.rokid.inbox.contracts.LocaleManager
 import com.rokid.inbox.contracts.Message
 import com.rokid.inbox.contracts.PhoneToGlassesMessage
 import com.rokid.inbox.contracts.SendMode
 import com.rokid.inbox.contracts.VoiceMode
+import com.rokid.inbox.phone.ai.AiDescriber
 import com.rokid.inbox.phone.channels.ChannelService
 import com.rokid.inbox.phone.channels.InboxAggregator
 import com.rokid.inbox.phone.voice.Wav
@@ -26,12 +29,19 @@ import java.io.ByteArrayOutputStream
  * across the wire.
  */
 class InboxController(
+    private val appContext: Context,
     private val servicesProvider: () -> List<ChannelService>,
     private val whisperProvider: () -> WhisperClient,
+    private val aiProvider: () -> AiDescriber,
     private val quickProvider: () -> List<com.rokid.inbox.contracts.QuickMessage>,
+    private val localeProvider: () -> String,
     private val scope: CoroutineScope,
 ) {
     @Volatile var sender: (PhoneToGlassesMessage) -> Unit = {}
+
+    /** Resolve a phone-composed, user-facing string in the currently selected language. */
+    private fun str(resId: Int, vararg args: Any): String =
+        LocaleManager.wrap(appContext).getString(resId, *args)
 
     private var lastChats: List<Chat> = emptyList()
 
@@ -48,7 +58,10 @@ class InboxController(
     private var mediaPlayer: android.media.MediaPlayer? = null
 
     fun onClientConnected() {
-        scope.launch(Dispatchers.IO) { sendInbox("all") }
+        scope.launch(Dispatchers.IO) {
+            sender(PhoneToGlassesMessage.SetLocale(localeProvider()))
+            sendInbox("all")
+        }
     }
 
     fun handle(message: GlassesToPhoneMessage) {
@@ -80,6 +93,9 @@ class InboxController(
             is GlassesToPhoneMessage.RequestImage -> scope.launch(Dispatchers.IO) {
                 fetchImage(message.boxId, message.chatId, message.messageId, message.fromMe)
             }
+            is GlassesToPhoneMessage.RequestDescription -> scope.launch(Dispatchers.IO) {
+                describe(message.boxId, message.chatId, message.messageId, message.fromMe, message.isImage, message.fileName)
+            }
         }
     }
 
@@ -106,7 +122,7 @@ class InboxController(
 
     private suspend fun openChat(boxId: String, chatId: String, limit: Int, atStartAllowed: Boolean) {
         val svc = serviceFor(boxId) ?: run {
-            sender(PhoneToGlassesMessage.Error("Caixa não conectada."))
+            sender(PhoneToGlassesMessage.Error(str(R.string.ctrl_box_not_connected)))
             return
         }
         val chat = lastChats.firstOrNull { it.boxId == boxId && it.id == chatId }
@@ -127,7 +143,7 @@ class InboxController(
             }
         } catch (e: Exception) {
             Log.e(TAG, "openChat failed", e)
-            sender(PhoneToGlassesMessage.Error("Erro ao carregar mensagens: ${e.message.orEmpty().take(120)}"))
+            sender(PhoneToGlassesMessage.Error(str(R.string.ctrl_load_error, e.message.orEmpty().take(120))))
         }
     }
 
@@ -139,7 +155,7 @@ class InboxController(
     private suspend fun sendText(boxId: String, chatId: String, text: String, replyToId: String, replyFromMe: Boolean) {
         val svc = serviceFor(boxId)
         if (svc == null || !svc.canSend) {
-            sender(PhoneToGlassesMessage.SendResult(ok = false, mode = SendMode.TEXT, error = "Canal somente leitura."))
+            sender(PhoneToGlassesMessage.SendResult(ok = false, mode = SendMode.TEXT, error = str(R.string.ctrl_readonly)))
             return
         }
         try {
@@ -153,14 +169,14 @@ class InboxController(
     private suspend fun react(boxId: String, chatId: String, messageId: String, emoji: String, fromMe: Boolean) {
         val svc = serviceFor(boxId)
         if (svc == null || !svc.canReact) {
-            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = "Reacoes nao suportadas."))
+            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = str(R.string.ctrl_reactions_unsupported)))
             return
         }
         try {
             svc.sendReaction(chatId, messageId, emoji, fromMe)
-            sender(PhoneToGlassesMessage.ActionResult(ok = true, text = "Reagiu com $emoji"))
+            sender(PhoneToGlassesMessage.ActionResult(ok = true, text = str(R.string.ctrl_reacted, emoji)))
         } catch (e: Exception) {
-            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = "Erro ao reagir: ${e.message.orEmpty().take(120)}"))
+            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = str(R.string.ctrl_react_error, e.message.orEmpty().take(120))))
         }
     }
 
@@ -169,15 +185,15 @@ class InboxController(
         try {
             val bytes = svc.fetchMedia(chatId, Message(id = messageId, isOutgoing = fromMe))
             if (bytes == null || bytes.isEmpty()) {
-                sender(PhoneToGlassesMessage.ActionResult(ok = false, text = "Audio indisponivel."))
+                sender(PhoneToGlassesMessage.ActionResult(ok = false, text = str(R.string.ctrl_audio_unavailable)))
                 return
             }
             val file = java.io.File.createTempFile("play", ".ogg")
             file.writeBytes(bytes)
             withContext(Dispatchers.Main) { startPlayback(file) }
-            sender(PhoneToGlassesMessage.ActionResult(ok = true, text = "Tocando audio no telefone..."))
+            sender(PhoneToGlassesMessage.ActionResult(ok = true, text = str(R.string.ctrl_playing_audio)))
         } catch (e: Exception) {
-            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = "Erro ao tocar: ${e.message.orEmpty().take(120)}"))
+            sender(PhoneToGlassesMessage.ActionResult(ok = false, text = str(R.string.ctrl_play_error, e.message.orEmpty().take(120))))
         }
     }
 
@@ -186,7 +202,7 @@ class InboxController(
         try {
             val bytes = svc.fetchMedia(chatId, Message(id = messageId, isOutgoing = fromMe))
             if (bytes == null || bytes.isEmpty()) {
-                sender(PhoneToGlassesMessage.ImageResult(messageId = messageId, ok = false, error = "Imagem indisponivel"))
+                sender(PhoneToGlassesMessage.ImageResult(messageId = messageId, ok = false, error = str(R.string.ctrl_image_unavailable)))
                 return
             }
             val small = downscaleJpeg(bytes)
@@ -202,7 +218,44 @@ class InboxController(
         }
     }
 
-    /** Downscale to keep the transfer small for the glasses display. */
+    private suspend fun describe(
+        boxId: String,
+        chatId: String,
+        messageId: String,
+        fromMe: Boolean,
+        isImage: Boolean,
+        fileName: String,
+    ) {
+        val ai = aiProvider()
+        if (!ai.isConfigured) {
+            sender(PhoneToGlassesMessage.DescriptionResult(messageId, false, error = str(R.string.ctrl_openai_needed)))
+            return
+        }
+        val svc = serviceFor(boxId)
+        if (svc == null) {
+            sender(PhoneToGlassesMessage.DescriptionResult(messageId, false, error = str(R.string.ctrl_box_not_connected)))
+            return
+        }
+        try {
+            val bytes = svc.fetchMedia(chatId, Message(id = messageId, isOutgoing = fromMe))
+            if (bytes == null || bytes.isEmpty()) {
+                sender(PhoneToGlassesMessage.DescriptionResult(messageId, false, error = str(R.string.ctrl_media_unavailable)))
+                return
+            }
+            val lang = localeProvider()
+            val text = if (isImage) {
+                ai.describeImage(downscaleJpeg(bytes, maxDim = 1024, quality = 85), lang)
+            } else {
+                ai.describeFile(bytes, fileName, lang)
+            }
+            sender(PhoneToGlassesMessage.DescriptionResult(messageId = messageId, ok = true, text = text))
+        } catch (e: Exception) {
+            Log.e(TAG, "describe failed", e)
+            sender(PhoneToGlassesMessage.DescriptionResult(messageId = messageId, ok = false, error = e.message?.take(160)))
+        }
+    }
+
+    /** Downscale to keep the transfer small for the glasses display / vision input. */
     private fun downscaleJpeg(bytes: ByteArray, maxDim: Int = 480, quality: Int = 75): ByteArray {
         val src = android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return bytes
         val scale = minOf(1f, maxDim.toFloat() / maxOf(src.width, src.height))
@@ -259,7 +312,7 @@ class InboxController(
     private suspend fun endVoice() {
         val raw = synchronized(pcm) { pcm.toByteArray().also { pcm.reset() } }
         if (raw.isEmpty()) {
-            sender(PhoneToGlassesMessage.Error("Nenhum áudio capturado."))
+            sender(PhoneToGlassesMessage.Error(str(R.string.ctrl_no_audio_captured)))
             return
         }
         val duration = maxOf(1, raw.size / (SAMPLE_RATE * 2))
@@ -273,7 +326,7 @@ class InboxController(
             if (voiceMode == VoiceMode.REPLY) {
                 confirmSend(SendMode.AUDIO)
             } else {
-                sender(PhoneToGlassesMessage.Error("Busca por voz precisa da chave OpenAI."))
+                sender(PhoneToGlassesMessage.Error(str(R.string.ctrl_voice_search_needs_key)))
             }
             return
         }
@@ -283,9 +336,9 @@ class InboxController(
             Log.e(TAG, "whisper failed", e)
             if (voiceMode == VoiceMode.REPLY) {
                 pendingTranscription = ""
-                sender(PhoneToGlassesMessage.Transcription(text = "(transcrição falhou)", durationSec = duration))
+                sender(PhoneToGlassesMessage.Transcription(text = str(R.string.ctrl_transcription_failed_preview), durationSec = duration))
             } else {
-                sender(PhoneToGlassesMessage.Error("Falha na transcrição: ${e.message.orEmpty().take(120)}"))
+                sender(PhoneToGlassesMessage.Error(str(R.string.ctrl_transcription_failed, e.message.orEmpty().take(120))))
             }
             return
         }
@@ -307,16 +360,16 @@ class InboxController(
     private suspend fun confirmSend(mode: SendMode) {
         val svc = serviceFor(voiceBoxId)
         if (svc == null || !svc.canSend) {
-            sender(PhoneToGlassesMessage.SendResult(ok = false, mode = mode, error = "Canal somente leitura."))
+            sender(PhoneToGlassesMessage.SendResult(ok = false, mode = mode, error = str(R.string.ctrl_readonly)))
             return
         }
         try {
             if (mode == SendMode.TEXT) {
                 val text = pendingTranscription.trim()
-                if (text.isBlank()) throw RuntimeException("Sem texto transcrito disponível")
+                if (text.isBlank()) throw RuntimeException(str(R.string.ctrl_no_transcribed_text))
                 svc.sendText(voiceChatId, text, voiceReplyToId, voiceReplyFromMe)
             } else {
-                val wav = pendingWav ?: throw RuntimeException("Sem áudio disponível")
+                val wav = pendingWav ?: throw RuntimeException(str(R.string.ctrl_no_audio_available))
                 svc.sendVoice(voiceChatId, wav, pendingDuration, voiceReplyToId, voiceReplyFromMe)
             }
             sender(PhoneToGlassesMessage.SendResult(ok = true, mode = mode))

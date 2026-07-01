@@ -1,6 +1,8 @@
 package com.rokid.inbox.phone
 
+import android.content.Context
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.os.Bundle
 import android.text.InputType
@@ -8,6 +10,7 @@ import android.view.Gravity
 import android.view.View
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -16,6 +19,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.rokid.inbox.contracts.ChannelKind
+import com.rokid.inbox.contracts.LocaleManager
 import com.rokid.inbox.phone.channels.ChannelService
 import com.rokid.inbox.phone.channels.GitHubService
 import com.rokid.inbox.phone.channels.GmailService
@@ -23,7 +27,7 @@ import com.rokid.inbox.phone.channels.TelegramService
 import com.rokid.inbox.phone.channels.WhatsAppService
 import kotlinx.coroutines.runBlocking
 
-/** Native settings: add/remove WhatsApp & GitHub inboxes and set the OpenAI key. */
+/** Native settings: add/remove inboxes, set the OpenAI key, and pick the language. */
 class InboxSettingsActivity : AppCompatActivity() {
     private lateinit var container: LinearLayout
     private val store by lazy { InboxConfigStore(applicationContext) }
@@ -31,6 +35,10 @@ class InboxSettingsActivity : AppCompatActivity() {
     private val green get() = ContextCompat.getColor(this, R.color.phosphor_primary)
     private val dim get() = ContextCompat.getColor(this, R.color.phosphor_dim)
     private val bright get() = ContextCompat.getColor(this, R.color.phosphor_text_bright)
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -49,21 +57,31 @@ class InboxSettingsActivity : AppCompatActivity() {
 
     private fun rebuild() {
         container.removeAllViews()
-        container.addView(title("[ INBOXES / SETTINGS ]"))
+        container.addView(title(getString(R.string.settings_title)))
         container.addView(spacer(dp(16)))
 
-        container.addView(label("CONNECTED INBOXES"))
+        container.addView(label(getString(R.string.label_language)))
+        container.addView(languageRow())
+
+        container.addView(spacer(dp(20)))
+        container.addView(label(getString(R.string.label_connected_inboxes)))
         val boxes = store.getBoxes()
-        if (boxes.isEmpty()) container.addView(body("None yet."))
+        if (boxes.isEmpty()) container.addView(body(getString(R.string.settings_none_yet)))
         boxes.forEach { box ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            row.addView(body("• ${box.name.ifBlank { box.kind.name }} (${box.kind.name})").apply {
+            row.addView(ImageView(this).apply {
+                setImageResource(iconFor(box.kind))
+                setColorFilter(green, PorterDuff.Mode.SRC_IN)
+                val s = dp(18)
+                layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = dp(8) }
+            })
+            row.addView(body(box.name.ifBlank { box.kind.name }).apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
-            row.addView(button("Remove") {
+            row.addView(button(getString(R.string.btn_remove)) {
                 store.deleteBox(box.id)
                 InboxGraph.reloadFromConfig()
                 rebuild()
@@ -72,26 +90,27 @@ class InboxSettingsActivity : AppCompatActivity() {
         }
 
         container.addView(spacer(dp(16)))
-        container.addView(button("+ Add WhatsApp (Evolution API)") { addWhatsApp() })
+        container.addView(button(getString(R.string.btn_add_whatsapp)) { addWhatsApp() })
         container.addView(spacer(dp(8)))
-        container.addView(button("+ Add GitHub PRs") { addGitHub() })
+        container.addView(button(getString(R.string.btn_add_github)) { addGitHub() })
         container.addView(spacer(dp(8)))
-        container.addView(button("+ Add Telegram (TDLib)") { addTelegram() })
+        container.addView(button(getString(R.string.btn_add_telegram)) { addTelegram() })
         container.addView(spacer(dp(8)))
-        container.addView(button("+ Add Gmail (read-only)") { addGmail() })
+        container.addView(button(getString(R.string.btn_add_gmail)) { addGmail() })
 
         container.addView(spacer(dp(24)))
-        container.addView(label("TRANSCRIPTION (OpenAI Whisper)"))
-        val keyField = editText("sk-...", store.getOpenAiKey(), password = true)
+        container.addView(label(getString(R.string.label_openai)))
+        container.addView(body(getString(R.string.openai_hint)))
+        val keyField = editText("sk-…", store.getOpenAiKey(), password = true)
         container.addView(keyField)
-        container.addView(button("Save OpenAI key") {
+        container.addView(button(getString(R.string.btn_save_openai)) {
             store.setOpenAiKey(keyField.text.toString().trim())
             InboxGraph.reloadFromConfig()
-            toast("Saved")
+            toast(getString(R.string.toast_saved))
         })
 
         container.addView(spacer(dp(24)))
-        container.addView(label("QUICK MESSAGES (canned replies)"))
+        container.addView(label(getString(R.string.label_quick)))
         store.getQuickMessages().forEach { qm ->
             val row = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -100,34 +119,73 @@ class InboxSettingsActivity : AppCompatActivity() {
             row.addView(body("• ${qm.title}").apply {
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             })
-            row.addView(button("Remove") {
+            row.addView(button(getString(R.string.btn_remove)) {
                 store.setQuickMessages(store.getQuickMessages().filterNot { it.title == qm.title && it.body == qm.body })
                 rebuild()
             })
             container.addView(row)
         }
-        container.addView(button("+ Add quick message") { addQuickMessage() })
+        container.addView(button(getString(R.string.btn_add_quick)) { addQuickMessage() })
     }
 
+    /* ---------------- language ---------------- */
+
+    private fun languageRow(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val current = LocaleManager.current(this)
+        row.addView(langButton(getString(R.string.lang_english), LocaleManager.EN, current))
+        row.addView(spacer(dp(10)).apply {
+            layoutParams = LinearLayout.LayoutParams(dp(10), dp(1))
+        })
+        row.addView(langButton(getString(R.string.lang_portuguese), LocaleManager.PT, current))
+        return row
+    }
+
+    private fun langButton(text: String, lang: String, current: String) = Button(this).apply {
+        this.text = if (lang == current) "◉ $text" else "○ $text"
+        setTextColor(if (lang == current) green else bright)
+        setBackgroundColor(Color.parseColor(if (lang == current) "#0F2A0F" else "#0A1A0A"))
+        typeface = Typeface.MONOSPACE
+        setOnClickListener { applyLanguage(lang) }
+    }
+
+    private fun applyLanguage(lang: String) {
+        if (!LocaleManager.save(this, lang)) return
+        InboxGraph.broadcastLocale(lang)
+        recreate()
+    }
+
+    /* ---------------- add channels ---------------- */
+
     private fun addQuickMessage() {
-        val title = editText("Titulo curto", "")
-        val bodyField = editText("Texto completo", "")
-        formDialog("Mensagem rapida", listOf("Titulo" to title, "Texto" to bodyField)) {
+        val title = editText(getString(R.string.quick_hint_title), "")
+        val bodyField = editText(getString(R.string.quick_hint_body), "")
+        formDialog(
+            getString(R.string.quick_dialog_title),
+            listOf(getString(R.string.quick_field_title) to title, getString(R.string.quick_field_text) to bodyField),
+        ) {
             val t = title.text.toString().trim()
             val b = bodyField.text.toString().trim()
-            if (t.isBlank() || b.isBlank()) { toast("Preencha titulo e texto"); return@formDialog }
+            if (t.isBlank() || b.isBlank()) { toast(getString(R.string.toast_fill_title_text)); return@formDialog }
             store.setQuickMessages(store.getQuickMessages() + com.rokid.inbox.contracts.QuickMessage(t, b))
             rebuild()
         }
     }
 
     private fun addWhatsApp() {
-        val serverUrl = editText("https://evolution.seudominio.com", "")
-        val instance = editText("minha-instancia", "")
-        val apiKey = editText("API Key", "", password = true)
+        val serverUrl = editText(getString(R.string.wa_hint_server), "")
+        val instance = editText(getString(R.string.wa_hint_instance), "")
+        val apiKey = editText(getString(R.string.field_api_key), "", password = true)
         formDialog(
-            "WhatsApp (Evolution API)",
-            listOf("Server URL" to serverUrl, "Instance" to instance, "API Key" to apiKey),
+            getString(R.string.wa_dialog_title),
+            listOf(
+                getString(R.string.wa_field_server) to serverUrl,
+                getString(R.string.wa_field_instance) to instance,
+                getString(R.string.field_api_key) to apiKey,
+            ),
         ) {
             val cfg = mapOf(
                 "serverUrl" to normalizeUrl(serverUrl.text.toString()),
@@ -141,11 +199,11 @@ class InboxSettingsActivity : AppCompatActivity() {
     }
 
     private fun addGitHub() {
-        val token = editText("Personal Access Token", "", password = true)
+        val token = editText(getString(R.string.gh_hint_token), "", password = true)
         val query = editText("is:open is:pr involves:@me", "")
         formDialog(
-            "GitHub PRs",
-            listOf("Token" to token, "PR filter (optional)" to query),
+            getString(R.string.gh_dialog_title),
+            listOf(getString(R.string.gh_field_token) to token, getString(R.string.gh_field_query) to query),
         ) {
             val cfg = mapOf(
                 "token" to token.text.toString().trim(),
@@ -158,12 +216,16 @@ class InboxSettingsActivity : AppCompatActivity() {
     }
 
     private fun addGmail() {
-        val clientId = editText("Client ID", "")
-        val clientSecret = editText("Client Secret", "", password = true)
-        val refreshToken = editText("Refresh Token", "", password = true)
+        val clientId = editText(getString(R.string.gm_field_client_id), "")
+        val clientSecret = editText(getString(R.string.gm_field_client_secret), "", password = true)
+        val refreshToken = editText(getString(R.string.gm_field_refresh_token), "", password = true)
         formDialog(
-            "Gmail (somente leitura)",
-            listOf("Client ID" to clientId, "Client Secret" to clientSecret, "Refresh Token" to refreshToken),
+            getString(R.string.gm_dialog_title),
+            listOf(
+                getString(R.string.gm_field_client_id) to clientId,
+                getString(R.string.gm_field_client_secret) to clientSecret,
+                getString(R.string.gm_field_refresh_token) to refreshToken,
+            ),
         ) {
             val cfg = mapOf(
                 "clientId" to clientId.text.toString().trim(),
@@ -177,11 +239,11 @@ class InboxSettingsActivity : AppCompatActivity() {
     }
 
     private fun addTelegram() {
-        val serverUrl = editText("https://seu-dominio:8787", "")
-        val apiKey = editText("Bridge API Key", "", password = true)
+        val serverUrl = editText(getString(R.string.tg_hint_url), "")
+        val apiKey = editText(getString(R.string.field_api_key), "", password = true)
         formDialog(
-            "Telegram (bridge GramJS)",
-            listOf("URL da bridge" to serverUrl, "API Key" to apiKey),
+            getString(R.string.tg_dialog_title),
+            listOf(getString(R.string.tg_field_url) to serverUrl, getString(R.string.field_api_key) to apiKey),
         ) {
             val cfg = mapOf(
                 "serverUrl" to normalizeUrl(serverUrl.text.toString()),
@@ -199,17 +261,17 @@ class InboxSettingsActivity : AppCompatActivity() {
         config: Map<String, String>,
         buildProbe: () -> ChannelService,
     ) {
-        toast("Testing connection...")
+        toast(getString(R.string.toast_testing))
         Thread {
             val result = runCatching { runBlocking { buildProbe().ping() } }
             runOnUiThread {
                 if (result.isSuccess) {
                     store.addBox(BoxConfig(InboxConfigStore.newBoxId(kind), kind, name, config))
                     InboxGraph.reloadFromConfig()
-                    toast("Connected")
+                    toast(getString(R.string.toast_connected))
                     rebuild()
                 } else {
-                    toast("Failed: ${result.exceptionOrNull()?.message?.take(160)}")
+                    toast(getString(R.string.toast_failed, result.exceptionOrNull()?.message?.take(160)))
                 }
             }
         }.start()
@@ -228,12 +290,19 @@ class InboxSettingsActivity : AppCompatActivity() {
         AlertDialog.Builder(this, R.style.Theme_PhosphorDialog)
             .setTitle(titleText)
             .setView(ScrollView(this).apply { addView(layout) })
-            .setPositiveButton("Test & connect") { _, _ -> onSave() }
+            .setPositiveButton(getString(R.string.dialog_test_connect)) { _, _ -> onSave() }
             .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
     /* ---------------- view helpers ---------------- */
+
+    private fun iconFor(kind: ChannelKind): Int = when (kind) {
+        ChannelKind.WHATSAPP -> R.drawable.ic_ch_whatsapp
+        ChannelKind.TELEGRAM -> R.drawable.ic_ch_telegram
+        ChannelKind.GMAIL -> R.drawable.ic_ch_gmail
+        ChannelKind.GITHUB -> R.drawable.ic_ch_github
+    }
 
     private fun title(text: String) = TextView(this).apply {
         this.text = text; setTextColor(green); textSize = 20f

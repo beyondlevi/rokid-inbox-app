@@ -64,8 +64,14 @@ data class Message(
     val senderName: String = "",
     /** Duration in seconds for voice/audio messages (0 otherwise). */
     val durationSec: Int = 0,
+    /** Original file name for document messages (used for AI descriptions). */
+    val fileName: String = "",
 ) {
     val isPlayableAudio: Boolean get() = media == "[voice]" || media == "[audio]"
+    val isImageMedia: Boolean get() = media == "[photo]" || media == "[sticker]"
+    val isDescribableFile: Boolean get() = media == "[file]"
+    /** Can an AI text description be requested for this message? */
+    val canDescribe: Boolean get() = isImageMedia || isDescribableFile
 }
 
 /** Voice capture intent: reply to the open chat, or search chats by name. */
@@ -132,11 +138,22 @@ sealed interface GlassesToPhoneMessage {
         val messageId: String,
         val fromMe: Boolean = false,
     ) : GlassesToPhoneMessage
+    /** Ask the phone's OpenAI agent to describe an image or a file (pdf/xlsx/...). */
+    data class RequestDescription(
+        val boxId: String,
+        val chatId: String,
+        val messageId: String,
+        val fromMe: Boolean = false,
+        val isImage: Boolean = false,
+        val fileName: String = "",
+    ) : GlassesToPhoneMessage
 }
 
 sealed interface PhoneToGlassesMessage {
     data class HelloAck(val ack: ProtocolHelloAck) : PhoneToGlassesMessage
     data class Status(val status: DeviceStatus) : PhoneToGlassesMessage
+    /** UI language the glasses should switch to ("en" / "pt"), chosen on the phone. */
+    data class SetLocale(val language: String = "en") : PhoneToGlassesMessage
     data class Error(val message: String) : PhoneToGlassesMessage
     data class InboxSnapshot(
         val chats: List<Chat> = emptyList(),
@@ -169,6 +186,13 @@ sealed interface PhoneToGlassesMessage {
         val messageId: String = "",
         val ok: Boolean = false,
         val base64: String = "",
+        val error: String? = null,
+    ) : PhoneToGlassesMessage
+    /** AI-generated text description of an image or file. */
+    data class DescriptionResult(
+        val messageId: String = "",
+        val ok: Boolean = false,
+        val text: String = "",
         val error: String? = null,
     ) : PhoneToGlassesMessage
 }

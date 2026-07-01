@@ -50,6 +50,7 @@ object WireProtocol {
         is GlassesToPhoneMessage.SendReaction -> WireEnvelope("inbox", "send_reaction", gson.toJson(message))
         is GlassesToPhoneMessage.PlayAudio -> WireEnvelope("inbox", "play_audio", gson.toJson(message))
         is GlassesToPhoneMessage.RequestImage -> WireEnvelope("inbox", "request_image", gson.toJson(message))
+        is GlassesToPhoneMessage.RequestDescription -> WireEnvelope("inbox", "request_description", gson.toJson(message))
     }
 
     private fun glassesMessageFor(envelope: WireEnvelope): GlassesToPhoneMessage? = when (envelope.channel) {
@@ -73,6 +74,7 @@ object WireProtocol {
             "send_reaction" -> parse(envelope, GlassesToPhoneMessage.SendReaction::class.java)
             "play_audio" -> parse(envelope, GlassesToPhoneMessage.PlayAudio::class.java)
             "request_image" -> parse(envelope, GlassesToPhoneMessage.RequestImage::class.java)
+            "request_description" -> parse(envelope, GlassesToPhoneMessage.RequestDescription::class.java)
             else -> null
         }
 
@@ -84,6 +86,7 @@ object WireProtocol {
     private fun phoneEnvelopeFor(message: PhoneToGlassesMessage): WireEnvelope = when (message) {
         is PhoneToGlassesMessage.HelloAck -> WireEnvelope("runtime", "hello_ack", gson.toJson(message.ack))
         is PhoneToGlassesMessage.Status -> WireEnvelope("runtime", "status", gson.toJson(message.status))
+        is PhoneToGlassesMessage.SetLocale -> WireEnvelope("runtime", "set_locale", gson.toJson(message))
         is PhoneToGlassesMessage.Error -> WireEnvelope("runtime", "error", gson.toJson(message))
         is PhoneToGlassesMessage.InboxSnapshot -> WireEnvelope("inbox", "inbox_snapshot", gson.toJson(message))
         is PhoneToGlassesMessage.ChatSnapshot -> WireEnvelope("inbox", "chat_snapshot", gson.toJson(message))
@@ -93,12 +96,14 @@ object WireProtocol {
         is PhoneToGlassesMessage.QuickMessages -> WireEnvelope("inbox", "quick_messages", gson.toJson(message))
         is PhoneToGlassesMessage.ActionResult -> WireEnvelope("inbox", "action_result", gson.toJson(message))
         is PhoneToGlassesMessage.ImageResult -> WireEnvelope("inbox", "image_result", gson.toJson(message))
+        is PhoneToGlassesMessage.DescriptionResult -> WireEnvelope("inbox", "description_result", gson.toJson(message))
     }
 
     private fun phoneMessageFor(envelope: WireEnvelope): PhoneToGlassesMessage? = when (envelope.channel) {
         "runtime" -> when (envelope.type) {
             "hello_ack" -> parse(envelope, ProtocolHelloAck::class.java)?.let { PhoneToGlassesMessage.HelloAck(it) }
             "status" -> parse(envelope, DeviceStatus::class.java)?.let { PhoneToGlassesMessage.Status(it) }
+            "set_locale" -> parse(envelope, PhoneToGlassesMessage.SetLocale::class.java)
             "error" -> parse(envelope, PhoneToGlassesMessage.Error::class.java)
             else -> null
         }
@@ -112,6 +117,7 @@ object WireProtocol {
             "quick_messages" -> parse(envelope, PhoneToGlassesMessage.QuickMessages::class.java)
             "action_result" -> parse(envelope, PhoneToGlassesMessage.ActionResult::class.java)
             "image_result" -> parse(envelope, PhoneToGlassesMessage.ImageResult::class.java)
+            "description_result" -> parse(envelope, PhoneToGlassesMessage.DescriptionResult::class.java)
             else -> null
         }
 

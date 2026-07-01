@@ -1,6 +1,7 @@
 package com.rokid.inbox.glasses
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -20,6 +21,7 @@ import com.rokid.inbox.contracts.Chat
 import com.rokid.inbox.contracts.ChannelKind
 import com.rokid.inbox.contracts.ChatType
 import com.rokid.inbox.contracts.GlassesToPhoneMessage
+import com.rokid.inbox.contracts.LocaleManager
 import com.rokid.inbox.contracts.Message
 import com.rokid.inbox.contracts.PhoneToGlassesMessage
 import com.rokid.inbox.contracts.QuickMessage
@@ -34,13 +36,16 @@ import java.time.format.DateTimeFormatter
 /**
  * Glasses HUD app: on-glasses navigation over the unified inbox streamed from the
  * phone. Conversations are a fluid per-message focus list (oldest at top) with
- * per-message actions: reply (quoting), emoji react, and play audio.
+ * per-message actions: reply (quoting), emoji react, play audio, AI describe.
+ *
+ * The UI language (en/pt) is chosen on the phone and pushed here via SetLocale.
  */
 class InboxGlassesActivity : AppCompatActivity() {
 
     private enum class View {
         INBOX, MENU, SEARCH_RECORDING, SEARCH_RESULTS, MESSAGES, MESSAGE_DETAIL, MESSAGE_ACTIONS, REACT,
         REPLY_MENU, QUICK, VOICE_IDLE, RECORDING, TRANSCRIBING, PREVIEW, SENDING, FEEDBACK,
+        DESCRIBING, DESCRIPTION,
     }
 
     private lateinit var hud: InboxHudView
@@ -50,8 +55,9 @@ class InboxGlassesActivity : AppCompatActivity() {
     private lateinit var gestures: GestureDetector
 
     private var view = View.INBOX
-    private var statusLabel = "Procurando o telefone via Bluetooth..."
+    private var statusLabel = ""
     private var connected = false
+    private var createdLang = ""
 
     private var chats: List<Chat> = emptyList()
     private var activeFilter = "all"
@@ -93,7 +99,7 @@ class InboxGlassesActivity : AppCompatActivity() {
     private var quickMessages: List<QuickMessage> = emptyList()
     private var voiceMode = VoiceMode.REPLY
 
-    // Reply target (set when "Responder" is chosen on a specific message).
+    // Reply target (set when "Reply" is chosen on a specific message).
     private var replyToId = ""
     private var replyFromMe = false
 
@@ -105,8 +111,19 @@ class InboxGlassesActivity : AppCompatActivity() {
     private var detailImageLoading = false
     private var detailImageError: String? = null
 
+    // AI description (image/file -> OpenAI text).
+    private var descMsgId = ""
+    private var descText = ""
+    private var descError: String? = null
+
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createdLang = LocaleManager.current(this)
+        statusLabel = getString(R.string.connecting_default)
         setContentView(R.layout.activity_inbox_glasses)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         hud = findViewById(R.id.inboxHudView)
@@ -156,6 +173,10 @@ class InboxGlassesActivity : AppCompatActivity() {
     private fun onPhoneMessage(message: PhoneToGlassesMessage) {
         when (message) {
             is PhoneToGlassesMessage.HelloAck -> Unit
+            is PhoneToGlassesMessage.SetLocale -> {
+                LocaleManager.save(this, message.language)
+                if (LocaleManager.current(this) != createdLang) recreate()
+            }
             is PhoneToGlassesMessage.Status -> {
                 statusLabel = message.status.statusLabel
                 val nowConnected = message.status.connectionState.name == "CONNECTED"
@@ -213,9 +234,9 @@ class InboxGlassesActivity : AppCompatActivity() {
             }
             is PhoneToGlassesMessage.SendResult -> {
                 feedbackText = if (message.ok) {
-                    if (message.mode == SendMode.TEXT) "\u2713 Texto enviado" else "\u2713 Audio enviado"
+                    if (message.mode == SendMode.TEXT) getString(R.string.sent_text) else getString(R.string.sent_audio)
                 } else {
-                    "Erro ao enviar: ${message.error.orEmpty().take(120)}"
+                    getString(R.string.send_error_fmt, message.error.orEmpty().take(120))
                 }
                 feedbackRefetch = message.ok
                 view = View.FEEDBACK
@@ -239,12 +260,25 @@ class InboxGlassesActivity : AppCompatActivity() {
                             val b = Base64.decode(message.base64, Base64.NO_WRAP)
                             BitmapFactory.decodeByteArray(b, 0, b.size)
                         }.getOrNull()
-                        detailImageError = if (detailBitmap == null) "Falha ao decodificar imagem" else null
+                        detailImageError = if (detailBitmap == null) getString(R.string.img_unavailable) else null
                     } else {
                         detailBitmap = null
-                        detailImageError = message.error ?: "Imagem indisponivel"
+                        detailImageError = message.error ?: getString(R.string.img_unavailable)
                     }
                     if (view == View.MESSAGE_DETAIL) render()
+                }
+            }
+            is PhoneToGlassesMessage.DescriptionResult -> {
+                if (message.messageId == descMsgId && descMsgId.isNotBlank()) {
+                    if (message.ok) {
+                        descText = message.text
+                        descError = null
+                    } else {
+                        descText = ""
+                        descError = message.error ?: getString(R.string.desc_empty)
+                    }
+                    view = View.DESCRIPTION
+                    render()
                 }
             }
         }
@@ -256,20 +290,22 @@ class InboxGlassesActivity : AppCompatActivity() {
         when (view) {
             View.INBOX -> renderInbox()
             View.MENU -> renderMenu()
-            View.SEARCH_RECORDING -> hud.renderText(header("Busca"), "\u25CF Gravando...\n\nDiga o nome do contato.", "Tap: buscar - 2x: cancelar")
+            View.SEARCH_RECORDING -> hud.renderText(header(getString(R.string.hdr_search)), getString(R.string.search_recording_body), getString(R.string.hint_search))
             View.SEARCH_RESULTS -> renderSearchResults()
             View.MESSAGES -> renderMessages()
             View.MESSAGE_DETAIL -> renderMessageDetail()
-            View.MESSAGE_ACTIONS -> hud.renderList(header("acoes"), actionItems.map { it.first }, actionIdx, "Swipe: navegar - Tap: abrir - 2x: voltar")
-            View.REACT -> hud.renderList(header("reagir"), EMOJIS.map { "${it.first}  ${it.second}" }, reactIdx, "Swipe: navegar - Tap: reagir - 2x: voltar")
-            View.REPLY_MENU -> hud.renderList(header("responder"), listOf("Voz", "Mensagens rapidas"), replyMenuIdx, "Swipe: navegar - Tap: abrir - 2x: voltar")
+            View.MESSAGE_ACTIONS -> hud.renderList(header(getString(R.string.hdr_actions)), actionItems.map { it.first }, actionIdx, getString(R.string.hint_nav_open_back))
+            View.REACT -> hud.renderList(header(getString(R.string.hdr_react)), EMOJIS.map { getString(R.string.react_row_fmt, it.first, getString(it.second)) }, reactIdx, getString(R.string.hint_react))
+            View.REPLY_MENU -> hud.renderList(header(getString(R.string.hdr_reply)), listOf(getString(R.string.reply_voice), getString(R.string.reply_quick)), replyMenuIdx, getString(R.string.hint_nav_open_back))
             View.QUICK -> renderQuick()
-            View.VOICE_IDLE -> hud.renderText(header("voz"), "Mensagem de voz\n\nTap para gravar.", "Tap: gravar - 2x: voltar")
-            View.RECORDING -> hud.renderText(header("voz"), "\u25CF Gravando...\n\nTap para parar e enviar.", "Tap: parar - 2x: cancelar")
-            View.TRANSCRIBING -> renderLoadingScreen("Transcrevendo")
+            View.VOICE_IDLE -> hud.renderText(header(getString(R.string.hdr_voice)), getString(R.string.voice_idle_body), getString(R.string.hint_record_back))
+            View.RECORDING -> hud.renderText(header(getString(R.string.hdr_voice)), getString(R.string.recording_body), getString(R.string.hint_stop_cancel))
+            View.TRANSCRIBING -> renderLoadingScreen(getString(R.string.load_transcribing))
             View.PREVIEW -> renderPreview()
-            View.SENDING -> renderLoadingScreen("Enviando")
-            View.FEEDBACK -> hud.renderText(header("pronto"), feedbackText, "Tap ou 2x: voltar")
+            View.SENDING -> renderLoadingScreen(getString(R.string.load_sending))
+            View.FEEDBACK -> hud.renderText(header(getString(R.string.hdr_done)), feedbackText, getString(R.string.hint_tap_or_back))
+            View.DESCRIBING -> renderLoadingScreen(getString(R.string.load_describing))
+            View.DESCRIPTION -> renderDescription()
         }
         scheduleSpinner()
     }
@@ -277,7 +313,7 @@ class InboxGlassesActivity : AppCompatActivity() {
     /* ---------------- spinner ---------------- */
 
     private fun isLoading(): Boolean = when (view) {
-        View.TRANSCRIBING, View.SENDING -> true
+        View.TRANSCRIBING, View.SENDING, View.DESCRIBING -> true
         View.INBOX -> connected && (inboxLoading || !inboxLoaded)
         View.MESSAGES -> convLoading && messages.isEmpty()
         View.MESSAGE_DETAIL -> detailImageLoading
@@ -299,65 +335,65 @@ class InboxGlassesActivity : AppCompatActivity() {
     }
 
     private fun renderLoadingScreen(label: String) {
-        hud.renderText(header(label), "${spinner()}  $label...", "Aguarde...", big = true)
+        hud.renderText(header(label), getString(R.string.loading_fmt, spinner(), label), getString(R.string.wait), big = true)
     }
 
     private fun renderInbox() {
         if (!connected && chats.isEmpty()) {
-            hud.renderText(header("conectando"), statusLabel, "2x: sair")
+            hud.renderText(header(getString(R.string.hdr_connecting)), statusLabel, getString(R.string.hint_exit))
             return
         }
         if (connected && (!inboxLoaded || inboxLoading)) {
-            renderLoadingScreen("Carregando")
+            renderLoadingScreen(getString(R.string.load_loading))
             return
         }
         val rows = ArrayList<InboxHudView.Row>()
-        rows += InboxHudView.Row(0, MENU_ROW)
+        rows += InboxHudView.Row(0, getString(R.string.menu_row))
         chats.forEach { rows += InboxHudView.Row(iconFor(it.channel), chatRowText(it)) }
         inboxIdx = inboxIdx.coerceIn(0, rows.size - 1)
-        val ctx = "${filterLabel()} - ${chats.size}"
-        hud.renderChatList(header(ctx), rows, inboxIdx, "Swipe: navegar - Tap: abrir - 2x: sair")
+        val ctx = "${filterLabel()} · ${chats.size}"
+        hud.renderChatList(header(ctx), rows, inboxIdx, getString(R.string.hint_nav_open_exit))
     }
 
     private fun renderMenu() {
         val items = menuItems()
         menuIdx = menuIdx.coerceIn(0, items.size - 1)
         hud.renderChatList(
-            header("Menu"),
+            header(getString(R.string.hdr_menu)),
             items.map { InboxHudView.Row(it.iconRes, it.label) },
             menuIdx,
-            "Swipe: navegar - Tap: abrir - 2x: voltar",
+            getString(R.string.hint_nav_open_back),
         )
     }
 
     private fun renderSearchResults() {
         if (searchResults.isEmpty()) {
-            hud.renderText(header("Busca"), "(nenhum contato encontrado)", "2x: menu")
+            hud.renderText(header(getString(R.string.hdr_search)), getString(R.string.search_none), getString(R.string.hint_menu_exit))
             return
         }
         searchIdx = searchIdx.coerceIn(0, searchResults.size - 1)
         val rows = searchResults.map { InboxHudView.Row(iconFor(it.channel), chatRowText(it)) }
-        hud.renderChatList(header("Busca - ${searchResults.size}"), rows, searchIdx, "Swipe: navegar - Tap: abrir - 2x: menu")
+        hud.renderChatList(header(getString(R.string.search_ctx_fmt, searchResults.size)), rows, searchIdx, getString(R.string.hint_nav_open_menu))
     }
 
     private fun renderMessages() {
         val chat = currentChat ?: return
         if (messages.isEmpty()) {
-            if (convLoading) renderLoadingScreen("Carregando mensagens")
-            else hud.renderText(header(chat.name), "(sem mensagens)", if (canSend) "Tap: responder - 2x: voltar" else "2x: voltar")
+            if (convLoading) renderLoadingScreen(getString(R.string.load_messages))
+            else hud.renderText(header(chat.name), getString(R.string.conv_empty), if (canSend) getString(R.string.hint_reply_back) else getString(R.string.hint_back))
             return
         }
         val range = computeConvWindow()
         val texts = range.map { messageFull(messages[it]) }
         val selInWin = (msgSelected - range.first).coerceIn(0, texts.size - 1)
-        val ctx = "${oneLine(chat.name)}${if (convLoading) " - carregando" else " - ${msgSelected + 1}/${messages.size}"}"
+        val ctx = oneLine(chat.name) + if (convLoading) getString(R.string.conv_loading_suffix) else getString(R.string.conv_ctx_fmt, msgSelected + 1, messages.size)
         hud.renderConversation(
             header(ctx),
             texts,
             selInWin,
             olderAbove = range.first > 0,
             newerBelow = range.last < messages.lastIndex,
-            hintText = "Swipe: navegar - Tap: abrir - 2x: voltar",
+            hintText = getString(R.string.hint_nav_open_back),
         )
     }
 
@@ -365,17 +401,22 @@ class InboxGlassesActivity : AppCompatActivity() {
         val m = selectedMessage() ?: run { view = View.MESSAGES; render(); return }
         if (isPhoto(m)) {
             when {
-                detailImageLoading -> renderLoadingScreen("Carregando imagem")
-                detailBitmap != null -> hud.renderImage(header("foto"), detailBitmap!!, m.text.trim(), "Tap: acoes - 2x: voltar")
-                else -> hud.renderText(header("foto"), detailImageError ?: "Imagem indisponivel", "Tap: acoes - 2x: voltar")
+                detailImageLoading -> renderLoadingScreen(getString(R.string.load_image))
+                detailBitmap != null -> hud.renderImage(header(getString(R.string.hdr_photo)), detailBitmap!!, m.text.trim(), getString(R.string.hint_photo_actions))
+                else -> hud.renderText(header(getString(R.string.hdr_photo)), detailImageError ?: getString(R.string.img_unavailable), getString(R.string.hint_photo_actions))
             }
         } else {
             hud.renderDetail(
                 header(oneLine(currentChat?.name.orEmpty())),
                 messageDetailText(m),
-                "Swipe: rolar - Tap: acoes - 2x: voltar",
+                getString(R.string.hint_scroll_actions),
             )
         }
+    }
+
+    private fun renderDescription() {
+        val body = descError?.let { getString(R.string.desc_error_fmt, it) } ?: descText.ifBlank { getString(R.string.desc_empty) }
+        hud.renderDetail(header(getString(R.string.hdr_description)), body, getString(R.string.hint_scroll_back))
     }
 
     /** Fill the screen with as many full messages as fit around the selection. */
@@ -420,22 +461,22 @@ class InboxGlassesActivity : AppCompatActivity() {
 
     private fun renderQuick() {
         if (quickMessages.isEmpty()) {
-            hud.renderText(header("rapidas"), "Carregando mensagens rapidas...", "2x: voltar")
+            hud.renderText(header(getString(R.string.hdr_quick)), getString(R.string.quick_loading), getString(R.string.hint_back))
             return
         }
         quickIdx = quickIdx.coerceIn(0, quickMessages.size - 1)
-        hud.renderList(header("rapidas"), quickMessages.map { it.title }, quickIdx, "Swipe: navegar - Tap: enviar - 2x: voltar")
+        hud.renderList(header(getString(R.string.hdr_quick)), quickMessages.map { it.title }, quickIdx, getString(R.string.hint_quick))
     }
 
     private fun renderPreview() {
-        val safe = oneLine(pendingTranscription).ifBlank { "(transcricao vazia)" }
-        val quoted = if (replyToId.isNotBlank()) "\n(respondendo a mensagem selecionada)" else ""
+        val safe = oneLine(pendingTranscription).ifBlank { getString(R.string.preview_empty) }
+        val quoted = if (replyToId.isNotBlank()) getString(R.string.preview_quoted_suffix) else ""
         hud.renderOptions(
-            header("voz"),
-            "Transcricao (${pendingDuration}s):\n\"$safe\"$quoted",
-            listOf("Enviar texto transcrito", "Enviar audio original"),
+            header(getString(R.string.hdr_voice)),
+            getString(R.string.preview_body_fmt, pendingDuration, safe, quoted),
+            listOf(getString(R.string.preview_send_text), getString(R.string.preview_send_audio)),
             previewIdx,
-            "Swipe: escolher - Tap: enviar - 2x: descartar",
+            getString(R.string.hint_preview),
         )
     }
 
@@ -481,6 +522,7 @@ class InboxGlassesActivity : AppCompatActivity() {
             View.REACT -> { reactIdx = (reactIdx + delta).coerceIn(0, EMOJIS.size - 1); render() }
             View.MESSAGES -> moveMessage(delta)
             View.MESSAGE_DETAIL -> { val m = selectedMessage(); if (m != null && !isPhoto(m)) hud.scrollDetailBy(delta) }
+            View.DESCRIPTION -> hud.scrollDetailBy(delta)
             else -> Unit
         }
     }
@@ -524,6 +566,8 @@ class InboxGlassesActivity : AppCompatActivity() {
             View.RECORDING -> { cancelMic(); view = View.VOICE_IDLE; render() }
             View.PREVIEW -> { bridge?.send(GlassesToPhoneMessage.CancelVoice); view = View.MESSAGES; render() }
             View.FEEDBACK -> leaveFeedback()
+            View.DESCRIBING -> { descMsgId = ""; view = View.MESSAGE_ACTIONS; render() }
+            View.DESCRIPTION -> { view = View.MESSAGE_ACTIONS; render() }
             View.TRANSCRIBING, View.SENDING -> Unit
         }
     }
@@ -541,7 +585,7 @@ class InboxGlassesActivity : AppCompatActivity() {
         convLoading = true
         messagesReturn = from
         view = View.MESSAGES
-        hud.renderText(header(chat.name), "Carregando mensagens...", "Aguarde...")
+        hud.renderText(header(chat.name), getString(R.string.loading_messages_body), getString(R.string.wait))
         bridge?.send(GlassesToPhoneMessage.OpenChat(chat.boxId, chat.id, MSG_LIMIT))
     }
 
@@ -582,16 +626,17 @@ class InboxGlassesActivity : AppCompatActivity() {
     private fun isPhoto(m: Message): Boolean = m.media == "[photo]"
 
     private fun messageDetailText(m: Message): String =
-        "${who(m)} - ${formatTime(m.date)}\n\n${messageBody(m)}"
+        "${who(m)} · ${formatTime(m.date)}\n\n${messageBody(m)}"
 
     private fun openActions() {
         val m = selectedMessage() ?: return
         val items = ArrayList<Pair<String, () -> Unit>>()
         if (canSend) {
-            items += "Responder" to { startReply(m) }
-            items += "Reagir" to { reactIdx = 0; view = View.REACT; render() }
+            items += getString(R.string.act_reply) to { startReply(m) }
+            items += getString(R.string.act_react) to { reactIdx = 0; view = View.REACT; render() }
         }
-        if (m.isPlayableAudio) items += "Tocar audio" to { playAudio(m) }
+        if (m.isPlayableAudio) items += getString(R.string.act_play_audio) to { playAudio(m) }
+        if (m.canDescribe) items += getString(R.string.act_describe) to { requestDescription(m) }
         if (items.isEmpty()) return // read-only text message: nothing to do
         actionItems = items
         actionIdx = 0
@@ -622,6 +667,25 @@ class InboxGlassesActivity : AppCompatActivity() {
         render()
     }
 
+    private fun requestDescription(m: Message) {
+        val chat = currentChat ?: return
+        descMsgId = m.id
+        descText = ""
+        descError = null
+        bridge?.send(
+            GlassesToPhoneMessage.RequestDescription(
+                boxId = chat.boxId,
+                chatId = chat.id,
+                messageId = m.id,
+                fromMe = m.isOutgoing,
+                isImage = m.isImageMedia,
+                fileName = m.fileName,
+            ),
+        )
+        view = View.DESCRIBING
+        render()
+    }
+
     private fun startVoice(mode: VoiceMode) {
         if (!hasMicPermission()) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQ_PERMS)
@@ -636,7 +700,7 @@ class InboxGlassesActivity : AppCompatActivity() {
         }
         mic = capture
         if (!capture.start()) {
-            feedbackText = "Microfone indisponivel nos oculos."
+            feedbackText = getString(R.string.mic_unavailable)
             feedbackRefetch = false
             view = View.FEEDBACK
             bridge?.send(GlassesToPhoneMessage.CancelVoice)
@@ -702,7 +766,7 @@ class InboxGlassesActivity : AppCompatActivity() {
             restoreMessageId = ""
             convLoading = true
             view = View.MESSAGES
-            hud.renderText(header(chat.name), "Carregando mensagens...", "Aguarde...")
+            hud.renderText(header(chat.name), getString(R.string.loading_messages_body), getString(R.string.wait))
             bridge?.send(GlassesToPhoneMessage.OpenChat(chat.boxId, chat.id, MSG_LIMIT))
         } else if (chat != null && messages.isNotEmpty()) {
             view = View.MESSAGES
@@ -719,9 +783,9 @@ class InboxGlassesActivity : AppCompatActivity() {
 
     private fun menuItems(): List<MenuEntry> {
         val items = ArrayList<MenuEntry>()
-        items += MenuEntry(0, "Buscar") { startSearch() }
-        items += MenuEntry(0, "Inbox geral") { setFilter("all") }
-        items += MenuEntry(0, "Nao lidas") { setFilter("unread") }
+        items += MenuEntry(0, getString(R.string.menu_search)) { startSearch() }
+        items += MenuEntry(0, getString(R.string.menu_inbox_all)) { setFilter("all") }
+        items += MenuEntry(0, getString(R.string.menu_unread)) { setFilter("unread") }
         chats.distinctBy { it.boxId }.forEach { c ->
             items += MenuEntry(iconFor(c.channel), boxDisplayLabel(c)) { setFilter(c.boxId) }
         }
@@ -742,9 +806,9 @@ class InboxGlassesActivity : AppCompatActivity() {
     }
 
     private fun filterLabel(): String = when (activeFilter) {
-        "all" -> "Caixa"
-        "unread" -> "Nao lidas"
-        else -> chats.firstOrNull { it.boxId == activeFilter }?.let { boxDisplayLabel(it) } ?: "Caixa"
+        "all" -> getString(R.string.filter_all)
+        "unread" -> getString(R.string.filter_unread)
+        else -> chats.firstOrNull { it.boxId == activeFilter }?.let { boxDisplayLabel(it) } ?: getString(R.string.filter_all)
     }
 
     private fun iconFor(channel: ChannelKind): Int = when (channel) {
@@ -766,24 +830,25 @@ class InboxGlassesActivity : AppCompatActivity() {
         return oneLine("$prefix${c.name}$type$unread")
     }
 
-    private fun who(m: Message): String = if (m.isOutgoing) "Eu" else m.senderName.ifBlank { "?" }
+    private fun who(m: Message): String = if (m.isOutgoing) getString(R.string.who_me) else m.senderName.ifBlank { getString(R.string.who_unknown) }
 
     private fun messageBody(m: Message): String = when {
-        m.isPlayableAudio -> "[voz ${fmtDur(m.durationSec)}]  (toque em Tocar audio)"
+        m.isPlayableAudio -> getString(R.string.msg_voice_fmt, fmtDur(m.durationSec))
         m.text.isNotBlank() -> m.text.replace("\r", "").trim()
+        m.isDescribableFile && m.fileName.isNotBlank() -> getString(R.string.msg_file_fmt, m.fileName)
         m.media != null -> m.media!!
-        else -> "(sem conteudo)"
+        else -> getString(R.string.msg_no_content)
     }
 
     private fun messageFull(m: Message): String {
         val b = messageBody(m)
         val capped = if (b.length > MSG_CHAR_CAP) b.take(MSG_CHAR_CAP).trimEnd() + "\u2026" else b
-        return "${who(m)} - ${formatTime(m.date)}\n$capped"
+        return "${who(m)} · ${formatTime(m.date)}\n$capped"
     }
 
     private fun fmtDur(sec: Int): String = if (sec <= 0) "0:00" else "%d:%02d".format(sec / 60, sec % 60)
 
-    private fun header(ctx: String): String = "Rokid Inbox - ${oneLine(ctx)}".take(46)
+    private fun header(ctx: String): String = "Rokid Inbox · ${oneLine(ctx)}".take(46)
 
     private fun oneLine(s: String): String = s.replace(Regex("\\s+"), " ").trim()
 
@@ -823,16 +888,15 @@ class InboxGlassesActivity : AppCompatActivity() {
         private const val MSG_CHAR_CAP = 200
         private const val CONV_LINE_BUDGET = 13
         private const val CONV_CHARS_PER_LINE = 32
-        private const val MENU_ROW = "\u00BB Menu / Buscar"
         private val SPINNER = listOf("|", "/", "-", "\\")
         private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val EMOJIS = listOf(
-            "\uD83D\uDC4D" to "Curtir",
-            "\u2764\uFE0F" to "Amei",
-            "\uD83D\uDE02" to "Haha",
-            "\uD83D\uDE2E" to "Uau",
-            "\uD83D\uDE22" to "Triste",
-            "\uD83D\uDE4F" to "Obrigado",
+            "\uD83D\uDC4D" to R.string.emoji_like,
+            "\u2764\uFE0F" to R.string.emoji_love,
+            "\uD83D\uDE02" to R.string.emoji_haha,
+            "\uD83D\uDE2E" to R.string.emoji_wow,
+            "\uD83D\uDE22" to R.string.emoji_sad,
+            "\uD83D\uDE4F" to R.string.emoji_thanks,
         )
     }
 }

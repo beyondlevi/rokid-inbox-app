@@ -38,6 +38,12 @@ browse, read, search by voice, and reply to hands-free — recording a voice not
 that is transcribed on the phone so you can send the transcribed text or the
 original audio.
 
+You can also ask an **AI agent to describe an image or a file** (pdf, xlsx, docx,
+csv, ...) directly from the glasses: open a photo or document message, pick
+**Descrever (IA)**, and the phone uses OpenAI to return a detailed text summary on
+the HUD. The same OpenAI key powers both voice transcription (Whisper) and these
+AI descriptions.
+
 Inspired by the Even Realities app [`byndcloud/even-inbox`](https://github.com/byndcloud/even-inbox),
 rebuilt natively as a two-app system (Android phone host + glasses client) over a
 Bluetooth transport with a versioned handshake and an amber-monospace HUD.
@@ -63,9 +69,9 @@ Rokid Glasses (thin HUD client)                 Android Phone (host / brain)
 ```
 
 - The **phone app** runs all channel integrations, the unified inbox aggregator,
-  OpenAI Whisper transcription, and the Bluetooth transport server. Credentials
-  are stored on-device (EncryptedSharedPreferences); nothing leaves the phone
-  except the calls each channel makes to its own API.
+  OpenAI Whisper transcription, OpenAI image/file descriptions, and the Bluetooth
+  transport server. Credentials are stored on-device (EncryptedSharedPreferences);
+  nothing leaves the phone except the calls each channel makes to its own API.
 - The **glasses app** is a fullscreen HUD: browse the inbox, open a conversation,
   reply by voice (record → transcription preview → send text or audio) or with a
   canned quick message, and voice-search chats by name.
@@ -132,7 +138,8 @@ API key — no native library on the phone. Setup:
 2. Pair the phone and glasses over Bluetooth at the OS level.
 3. Open the phone app, grant Bluetooth/notification permissions, then open
    **[ INBOXES / SETTINGS ]** and add at least one channel (WhatsApp, GitHub,
-   Gmail, or Telegram) and, optionally, your OpenAI key for transcription.
+   Gmail, or Telegram) and, optionally, your OpenAI key (used for voice
+   transcription and AI image/file descriptions).
 4. Open the Inbox app on the glasses. Browse the inbox, open a chat, and reply by
    voice (record → preview → send text/audio) or with a quick message.
 

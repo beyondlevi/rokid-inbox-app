@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+- AI descriptions: from the glasses, open a photo or a file (pdf, xlsx, docx,
+  csv, ...) and pick **Descrever (IA)** to get a detailed text description on the
+  HUD. Images use OpenAI vision; files are uploaded and read by the OpenAI agent.
+  The existing OpenAI key now powers both Whisper transcription and AI descriptions.
+
 ## [1.0.0] - 2026-07-01
 
 ### Added

@@ -2,4 +2,107 @@
     <string name="app_name">Rokid Inbox Phone</string>
     <string name="notification_channel_name">Rokid Inbox Bluetooth</string>
     <string name="notification_text">Inbox Bluetooth runtime is active.</string>
+
+    <!-- Home -->
+    <string name="home_title">[ ROKID INBOX ]</string>
+    <string name="home_starting">Starting…</string>
+    <string name="home_glasses_connected">● GLASSES CONNECTED</string>
+    <string name="home_glasses_state">○ %1$s</string>
+    <string name="label_connected_inboxes">CONNECTED INBOXES</string>
+    <string name="home_no_inboxes">No inboxes yet. Tap [ INBOXES / SETTINGS ] to add a channel.</string>
+    <string name="openai_configured">OpenAI: key configured (Whisper STT + AI descriptions)</string>
+    <string name="openai_missing">OpenAI: no key (voice sends audio only, no AI descriptions)</string>
+    <string name="btn_inboxes_settings">[ INBOXES / SETTINGS ]</string>
+    <string name="btn_bt_settings">[ BT SETTINGS ]</string>
+    <string name="home_pair_hint">Pair the glasses over Bluetooth, then open the Inbox app on the glasses.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">[ INBOXES / SETTINGS ]</string>
+    <string name="settings_none_yet">None yet.</string>
+    <string name="btn_remove">Remove</string>
+    <string name="btn_add_whatsapp">+ Add WhatsApp (Evolution API)</string>
+    <string name="btn_add_github">+ Add GitHub PRs</string>
+    <string name="btn_add_telegram">+ Add Telegram (bridge)</string>
+    <string name="btn_add_gmail">+ Add Gmail (read-only)</string>
+
+    <string name="label_language">LANGUAGE</string>
+    <string name="lang_english">English</string>
+    <string name="lang_portuguese">Português</string>
+
+    <string name="label_openai">OPENAI KEY (Whisper + AI descriptions)</string>
+    <string name="openai_hint">Used for voice transcription (Whisper) and for AI descriptions of images and files (pdf, xlsx, …).</string>
+    <string name="btn_save_openai">Save OpenAI key</string>
+    <string name="toast_saved">Saved</string>
+
+    <string name="label_quick">QUICK MESSAGES (canned replies)</string>
+    <string name="btn_add_quick">+ Add quick message</string>
+    <string name="quick_dialog_title">Quick message</string>
+    <string name="quick_hint_title">Short title</string>
+    <string name="quick_hint_body">Full text</string>
+    <string name="quick_field_title">Title</string>
+    <string name="quick_field_text">Text</string>
+    <string name="toast_fill_title_text">Fill in title and text</string>
+
+    <!-- Add-channel dialogs -->
+    <string name="wa_dialog_title">WhatsApp (Evolution API)</string>
+    <string name="wa_hint_server">https://evolution.yourdomain.com</string>
+    <string name="wa_hint_instance">my-instance</string>
+    <string name="wa_field_server">Server URL</string>
+    <string name="wa_field_instance">Instance</string>
+    <string name="field_api_key">API Key</string>
+
+    <string name="gh_dialog_title">GitHub PRs</string>
+    <string name="gh_hint_token">Personal Access Token</string>
+    <string name="gh_field_token">Token</string>
+    <string name="gh_field_query">PR filter (optional)</string>
+
+    <string name="gm_dialog_title">Gmail (read-only)</string>
+    <string name="gm_field_client_id">Client ID</string>
+    <string name="gm_field_client_secret">Client Secret</string>
+    <string name="gm_field_refresh_token">Refresh Token</string>
+
+    <string name="tg_dialog_title">Telegram (GramJS bridge)</string>
+    <string name="tg_hint_url">https://your-domain:8787</string>
+    <string name="tg_field_url">Bridge URL</string>
+
+    <string name="dialog_test_connect">Test &amp; connect</string>
+    <string name="toast_testing">Testing connection…</string>
+    <string name="toast_connected">Connected</string>
+    <string name="toast_failed">Failed: %1$s</string>
+
+    <!-- Controller feedback pushed to the glasses -->
+    <string name="ctrl_box_not_connected">Inbox not connected.</string>
+    <string name="ctrl_load_error">Error loading messages: %1$s</string>
+    <string name="ctrl_readonly">Read-only channel.</string>
+    <string name="ctrl_reactions_unsupported">Reactions not supported.</string>
+    <string name="ctrl_reacted">Reacted with %1$s</string>
+    <string name="ctrl_react_error">Error reacting: %1$s</string>
+    <string name="ctrl_audio_unavailable">Audio unavailable.</string>
+    <string name="ctrl_playing_audio">Playing audio on the phone…</string>
+    <string name="ctrl_play_error">Error playing: %1$s</string>
+    <string name="ctrl_image_unavailable">Image unavailable</string>
+    <string name="ctrl_media_unavailable">Media unavailable.</string>
+    <string name="ctrl_openai_needed">Configure the OpenAI key (Whisper + AI) on the phone.</string>
+    <string name="ctrl_no_audio_captured">No audio captured.</string>
+    <string name="ctrl_voice_search_needs_key">Voice search needs the OpenAI key.</string>
+    <string name="ctrl_transcription_failed_preview">(transcription failed)</string>
+    <string name="ctrl_transcription_failed">Transcription failed: %1$s</string>
+    <string name="ctrl_no_transcribed_text">No transcribed text available</string>
+    <string name="ctrl_no_audio_available">No audio available</string>
+
+    <!-- Bluetooth transport status (shown on phone + glasses) -->
+    <string name="status_server_starting">Bluetooth server starting…</string>
+    <string name="status_server_stopped">Bluetooth server stopped.</string>
+    <string name="status_glasses_disconnected_wait">Glasses disconnected. Waiting for reconnection.</string>
+    <string name="status_adapter_unavailable">Bluetooth adapter unavailable.</string>
+    <string name="status_server_ready">Bluetooth server ready. Waiting for the glasses to connect.</string>
+    <string name="status_glasses_connecting">Glasses connected. Negotiating protocol…</string>
+    <string name="status_server_error">Bluetooth server error: %1$s</string>
+    <string name="status_glasses_invalid">Glasses sent an invalid message.</string>
+    <string name="status_incompatible_protocol">Glasses use an incompatible Inbox protocol.</string>
+    <string name="status_incompatible_version">Incompatible glasses protocol version.</string>
+    <string name="status_handshake_failed">Protocol handshake failed.</string>
+    <string name="status_glasses_connected_bt">Glasses connected over Bluetooth.</string>
+    <string name="status_glasses_disconnected_bt">Glasses disconnected. Waiting for Bluetooth reconnection.</string>
+    <string name="error_unknown">unknown</string>
 </resources>

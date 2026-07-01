@@ -55,7 +55,7 @@ class TelegramService(
             if (!res.isSuccessful) throw RuntimeException("Telegram bridge ${res.code}: ${text.take(200).ifBlank { res.message }}")
             val obj = Http.parse(text).obj()
             if (obj?.get("authorized")?.asBooleanOrFalse() != true) {
-                throw RuntimeException("Bridge acessível, mas a conta não está logada. Rode 'npm run login' no servidor.")
+                throw RuntimeException("Bridge reachable, but the account is not logged in. Run 'npm run login' on the server.")
             }
         }
     }
@@ -90,6 +90,7 @@ class TelegramService(
                 isOutgoing = m.get("isOutgoing")?.asBooleanOrFalse() ?: false,
                 senderName = m.str("senderName"),
                 durationSec = m.intOrNull("durationSec") ?: 0,
+                fileName = m.str("fileName"),
             )
         }
         return msgs.reversed() // bridge returns newest-first; show oldest-first

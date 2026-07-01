@@ -1,9 +1,11 @@
 package com.rokid.inbox.phone
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.graphics.PorterDuff
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
@@ -11,6 +13,7 @@ import android.provider.Settings
 import android.view.Gravity
 import android.view.View
 import android.widget.Button
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -18,21 +21,28 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.ContextCompat.startForegroundService
-import com.rokid.inbox.contracts.ConnectionState
+import com.rokid.inbox.contracts.ChannelKind
+import com.rokid.inbox.contracts.LocaleManager
 
 /** Host status screen: shows the glasses link + connected boxes, opens settings. */
 class InboxPhoneActivity : AppCompatActivity() {
     private lateinit var statusLine: TextView
-    private lateinit var boxesLine: TextView
+    private lateinit var boxesContainer: LinearLayout
     private lateinit var sttLine: TextView
     private var unsubscribe: (() -> Unit)? = null
+    private var createdLang: String = ""
 
     private val green get() = ContextCompat.getColor(this, R.color.phosphor_primary)
     private val dim get() = ContextCompat.getColor(this, R.color.phosphor_dim)
     private val bright get() = ContextCompat.getColor(this, R.color.phosphor_text_bright)
 
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(LocaleManager.wrap(newBase))
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        createdLang = LocaleManager.current(this)
         setContentView(buildUi())
         InboxGraph.initialize(applicationContext)
         startForegroundService(this, Intent(this, InboxPhoneService::class.java))
@@ -46,6 +56,7 @@ class InboxPhoneActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (LocaleManager.current(this) != createdLang) { recreate(); return }
         if (hasRuntimePermissions()) InboxGraph.start(applicationContext)
     }
 
@@ -63,18 +74,37 @@ class InboxPhoneActivity : AppCompatActivity() {
     private fun render(state: InboxPhoneViewState) {
         val connected = state.deviceStatus.bluetoothClientCount > 0
         statusLine.text = buildString {
-            append(if (connected) "● GLASSES CONNECTED" else "○ ${state.deviceStatus.connectionState.name}")
+            append(if (connected) getString(R.string.home_glasses_connected) else getString(R.string.home_glasses_state, state.deviceStatus.connectionState.name))
             append("\n")
             append(state.deviceStatus.statusLabel)
         }
         statusLine.setTextColor(if (connected) green else dim)
-        boxesLine.text = if (state.boxes.isEmpty()) {
-            "No inboxes yet. Tap [ INBOXES / SETTINGS ] to add WhatsApp or GitHub."
-        } else {
-            state.boxes.joinToString("\n") { "${it.label} ${it.name.ifBlank { it.kind.name }}" }
-        }
-        sttLine.text = if (state.openAiConfigured) "STT: Whisper key configured" else "STT: no OpenAI key (voice sends audio only)"
+        renderBoxes(state.boxes)
+        sttLine.text = if (state.openAiConfigured) getString(R.string.openai_configured) else getString(R.string.openai_missing)
         sttLine.setTextColor(if (state.openAiConfigured) green else dim)
+    }
+
+    private fun renderBoxes(boxes: List<BoxSummary>) {
+        boxesContainer.removeAllViews()
+        if (boxes.isEmpty()) {
+            boxesContainer.addView(body(getString(R.string.home_no_inboxes)))
+            return
+        }
+        boxes.forEach { box ->
+            val row = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, dp(3), 0, dp(3))
+            }
+            row.addView(ImageView(this).apply {
+                setImageResource(iconFor(box.kind))
+                setColorFilter(green, PorterDuff.Mode.SRC_IN)
+                val s = dp(18)
+                layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = dp(10) }
+            })
+            row.addView(body(box.name.ifBlank { box.kind.name }))
+            boxesContainer.addView(row)
+        }
     }
 
     private fun buildUi(): View {
@@ -82,30 +112,38 @@ class InboxPhoneActivity : AppCompatActivity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), dp(28), dp(20), dp(20))
         }
-        root.addView(title("[ ROKID INBOX ]"))
+        root.addView(title(getString(R.string.home_title)))
         root.addView(spacer(dp(16)))
-        statusLine = body("Starting...").also { root.addView(it) }
+        statusLine = body(getString(R.string.home_starting)).also { root.addView(it) }
         root.addView(spacer(dp(16)))
-        root.addView(label("CONNECTED INBOXES"))
-        boxesLine = body("...").also { root.addView(it) }
+        root.addView(label(getString(R.string.label_connected_inboxes)))
+        boxesContainer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        root.addView(boxesContainer)
         root.addView(spacer(dp(16)))
-        sttLine = body("STT: ...").also { root.addView(it) }
+        sttLine = body("").also { root.addView(it) }
         root.addView(spacer(dp(24)))
-        root.addView(button("[ INBOXES / SETTINGS ]") {
+        root.addView(button(getString(R.string.btn_inboxes_settings)) {
             startActivity(Intent(this, InboxSettingsActivity::class.java))
         })
         root.addView(spacer(dp(10)))
-        root.addView(button("[ BT SETTINGS ]") {
+        root.addView(button(getString(R.string.btn_bt_settings)) {
             startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         })
         root.addView(spacer(dp(16)))
-        root.addView(body("Pair the glasses over Bluetooth, then open the Inbox app on the glasses.").also {
+        root.addView(body(getString(R.string.home_pair_hint)).also {
             it.setTextColor(dim)
         })
         return ScrollView(this).apply {
             setBackgroundColor(ContextCompat.getColor(this@InboxPhoneActivity, R.color.phosphor_bg))
             addView(root)
         }
+    }
+
+    private fun iconFor(kind: ChannelKind): Int = when (kind) {
+        ChannelKind.WHATSAPP -> R.drawable.ic_ch_whatsapp
+        ChannelKind.TELEGRAM -> R.drawable.ic_ch_telegram
+        ChannelKind.GMAIL -> R.drawable.ic_ch_gmail
+        ChannelKind.GITHUB -> R.drawable.ic_ch_github
     }
 
     private fun title(text: String) = TextView(this).apply {

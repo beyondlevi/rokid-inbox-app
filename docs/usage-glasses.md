@@ -24,9 +24,11 @@ or hardware keys):
   reaching the top loads older. Tap a message to open it.
 - **Message detail** — the full message with its own scroll; for a `[photo]` it
   loads and shows the image. Tap again for actions, double-tap to return.
-- **Actions** — `Responder` (reply), `Reagir` (emoji), and `Tocar áudio` for
-  voice/audio messages.
+- **Actions** — `Responder` (reply), `Reagir` (emoji), `Tocar áudio` for
+  voice/audio messages, and `Descrever (IA)` for photos and files.
 - **Reply** — `Voz` (record a voice note) or `Mensagens rápidas` (canned replies).
+- **AI description** — a scrollable text summary of an image or file returned by
+  the OpenAI agent.
 
 ## Replying by voice
 
@@ -46,6 +48,19 @@ or hardware keys):
 - **Tocar áudio** — plays a voice/audio message (audio comes out on the phone,
   or the glasses speaker if they're your Bluetooth audio output).
 - **Photos** — open a `[photo]` message to view the image (downscaled by the phone).
+
+## AI descriptions (images & files)
+
+Ask an OpenAI agent to describe a picture or document without leaving the glasses:
+
+1. Open a `[photo]`/`[sticker]` message (the image loads) or a `[file]` message
+   (pdf, xlsx, docx, csv, ...), then tap for **Actions → Descrever (IA)**.
+2. The phone downloads the media, sends it to OpenAI, and streams back a detailed
+   text description. Swipe to scroll long descriptions; double-tap to go back.
+
+- Images use OpenAI vision; files are uploaded and read by the OpenAI agent.
+- This needs the **OpenAI key** in phone Settings — the same key used for Whisper
+  voice transcription.
 
 ## Voice search
 

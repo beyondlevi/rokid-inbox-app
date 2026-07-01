@@ -136,7 +136,14 @@ class TelegramBridge {
       isOutgoing: Boolean(m.out),
       senderName: this.senderName(m.sender),
       durationSec: this.audioDuration(m),
+      fileName: this.fileName(m),
     }
+  }
+
+  fileName(m) {
+    const attrs = m.media?.document?.attributes || []
+    const a = attrs.find((x) => x instanceof Api.DocumentAttributeFilename)
+    return a?.fileName || ''
   }
 
   mediaTag(m) {

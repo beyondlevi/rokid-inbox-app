@@ -1,0 +1,108 @@
+<resources>
+    <string name="app_name">Rokid Inbox Phone</string>
+    <string name="notification_channel_name">Rokid Inbox Bluetooth</string>
+    <string name="notification_text">O runtime Bluetooth do Inbox está ativo.</string>
+
+    <!-- Home -->
+    <string name="home_title">[ ROKID INBOX ]</string>
+    <string name="home_starting">Iniciando…</string>
+    <string name="home_glasses_connected">● ÓCULOS CONECTADOS</string>
+    <string name="home_glasses_state">○ %1$s</string>
+    <string name="label_connected_inboxes">CAIXAS CONECTADAS</string>
+    <string name="home_no_inboxes">Nenhuma caixa ainda. Toque em [ INBOXES / SETTINGS ] para adicionar um canal.</string>
+    <string name="openai_configured">OpenAI: chave configurada (Whisper STT + descrições por IA)</string>
+    <string name="openai_missing">OpenAI: sem chave (voz envia só áudio, sem descrições por IA)</string>
+    <string name="btn_inboxes_settings">[ INBOXES / SETTINGS ]</string>
+    <string name="btn_bt_settings">[ BT SETTINGS ]</string>
+    <string name="home_pair_hint">Pareie os óculos por Bluetooth e abra o app Inbox nos óculos.</string>
+
+    <!-- Settings -->
+    <string name="settings_title">[ INBOXES / SETTINGS ]</string>
+    <string name="settings_none_yet">Nenhuma ainda.</string>
+    <string name="btn_remove">Remover</string>
+    <string name="btn_add_whatsapp">+ Adicionar WhatsApp (Evolution API)</string>
+    <string name="btn_add_github">+ Adicionar GitHub PRs</string>
+    <string name="btn_add_telegram">+ Adicionar Telegram (bridge)</string>
+    <string name="btn_add_gmail">+ Adicionar Gmail (somente leitura)</string>
+
+    <string name="label_language">IDIOMA</string>
+    <string name="lang_english">English</string>
+    <string name="lang_portuguese">Português</string>
+
+    <string name="label_openai">CHAVE OPENAI (Whisper + descrições por IA)</string>
+    <string name="openai_hint">Usada para transcrição de voz (Whisper) e para descrições por IA de imagens e arquivos (pdf, xlsx, …).</string>
+    <string name="btn_save_openai">Salvar chave OpenAI</string>
+    <string name="toast_saved">Salvo</string>
+
+    <string name="label_quick">MENSAGENS RÁPIDAS (respostas prontas)</string>
+    <string name="btn_add_quick">+ Adicionar mensagem rápida</string>
+    <string name="quick_dialog_title">Mensagem rápida</string>
+    <string name="quick_hint_title">Título curto</string>
+    <string name="quick_hint_body">Texto completo</string>
+    <string name="quick_field_title">Título</string>
+    <string name="quick_field_text">Texto</string>
+    <string name="toast_fill_title_text">Preencha título e texto</string>
+
+    <!-- Add-channel dialogs -->
+    <string name="wa_dialog_title">WhatsApp (Evolution API)</string>
+    <string name="wa_hint_server">https://evolution.seudominio.com</string>
+    <string name="wa_hint_instance">minha-instancia</string>
+    <string name="wa_field_server">URL do servidor</string>
+    <string name="wa_field_instance">Instância</string>
+    <string name="field_api_key">API Key</string>
+
+    <string name="gh_dialog_title">GitHub PRs</string>
+    <string name="gh_hint_token">Personal Access Token</string>
+    <string name="gh_field_token">Token</string>
+    <string name="gh_field_query">Filtro de PR (opcional)</string>
+
+    <string name="gm_dialog_title">Gmail (somente leitura)</string>
+    <string name="gm_field_client_id">Client ID</string>
+    <string name="gm_field_client_secret">Client Secret</string>
+    <string name="gm_field_refresh_token">Refresh Token</string>
+
+    <string name="tg_dialog_title">Telegram (bridge GramJS)</string>
+    <string name="tg_hint_url">https://seu-dominio:8787</string>
+    <string name="tg_field_url">URL da bridge</string>
+
+    <string name="dialog_test_connect">Testar e conectar</string>
+    <string name="toast_testing">Testando conexão…</string>
+    <string name="toast_connected">Conectado</string>
+    <string name="toast_failed">Falhou: %1$s</string>
+
+    <!-- Controller feedback pushed to the glasses -->
+    <string name="ctrl_box_not_connected">Caixa não conectada.</string>
+    <string name="ctrl_load_error">Erro ao carregar mensagens: %1$s</string>
+    <string name="ctrl_readonly">Canal somente leitura.</string>
+    <string name="ctrl_reactions_unsupported">Reações não suportadas.</string>
+    <string name="ctrl_reacted">Reagiu com %1$s</string>
+    <string name="ctrl_react_error">Erro ao reagir: %1$s</string>
+    <string name="ctrl_audio_unavailable">Áudio indisponível.</string>
+    <string name="ctrl_playing_audio">Tocando áudio no telefone…</string>
+    <string name="ctrl_play_error">Erro ao tocar: %1$s</string>
+    <string name="ctrl_image_unavailable">Imagem indisponível</string>
+    <string name="ctrl_media_unavailable">Mídia indisponível.</string>
+    <string name="ctrl_openai_needed">Configure a chave OpenAI (Whisper + IA) no telefone.</string>
+    <string name="ctrl_no_audio_captured">Nenhum áudio capturado.</string>
+    <string name="ctrl_voice_search_needs_key">Busca por voz precisa da chave OpenAI.</string>
+    <string name="ctrl_transcription_failed_preview">(transcrição falhou)</string>
+    <string name="ctrl_transcription_failed">Falha na transcrição: %1$s</string>
+    <string name="ctrl_no_transcribed_text">Sem texto transcrito disponível</string>
+    <string name="ctrl_no_audio_available">Sem áudio disponível</string>
+
+    <!-- Bluetooth transport status (shown on phone + glasses) -->
+    <string name="status_server_starting">Servidor Bluetooth iniciando…</string>
+    <string name="status_server_stopped">Servidor Bluetooth parado.</string>
+    <string name="status_glasses_disconnected_wait">Óculos desconectados. Aguardando reconexão.</string>
+    <string name="status_adapter_unavailable">Adaptador Bluetooth indisponível.</string>
+    <string name="status_server_ready">Servidor Bluetooth pronto. Aguardando os óculos conectarem.</string>
+    <string name="status_glasses_connecting">Óculos conectados. Negociando protocolo…</string>
+    <string name="status_server_error">Erro no servidor Bluetooth: %1$s</string>
+    <string name="status_glasses_invalid">Os óculos enviaram uma mensagem inválida.</string>
+    <string name="status_incompatible_protocol">Os óculos usam um protocolo do Inbox incompatível.</string>
+    <string name="status_incompatible_version">Versão de protocolo dos óculos incompatível.</string>
+    <string name="status_handshake_failed">Falha no handshake do protocolo.</string>
+    <string name="status_glasses_connected_bt">Óculos conectados via Bluetooth.</string>
+    <string name="status_glasses_disconnected_bt">Óculos desconectados. Aguardando reconexão Bluetooth.</string>
+    <string name="error_unknown">desconhecido</string>
+</resources>

@@ -217,6 +217,7 @@ class WhatsAppService(
             isOutgoing = isOutgoing,
             senderName = if (isOutgoing) "" else r.str("pushName"),
             durationSec = message.optObj("audioMessage").intOrNull("seconds") ?: 0,
+            fileName = fileNameOf(message),
         )
     }
 
@@ -270,6 +271,14 @@ class WhatsAppService(
                 val cap = message.optObj(k).str("caption")
                 if (cap.isNotBlank()) return cap
             }
+            return ""
+        }
+
+        fun fileNameOf(message: JsonObject?): String {
+            message ?: return ""
+            message.optObj("documentMessage")?.let { val n = it.str("fileName"); if (n.isNotBlank()) return n }
+            message.optObj("documentWithCaptionMessage")?.optObj("message")?.optObj("documentMessage")
+                ?.let { val n = it.str("fileName"); if (n.isNotBlank()) return n }
             return ""
         }
 
