@@ -59,17 +59,21 @@ class InboxHudView @JvmOverloads constructor(
         header.text = headerText
         hint.text = hintText
         body.gravity = Gravity.TOP
+        detailScroll = null
         body.removeAllViews()
         if (rows.isEmpty()) {
             body.addView(mono(16f, COLOR_SECONDARY).apply {
-                text = "(vazio)"
+                text = context.getString(R.string.hud_empty)
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
             })
             return
         }
+        val sel = selected.coerceIn(0, rows.size - 1)
+        val list = LinearLayout(context).apply { orientation = VERTICAL }
+        var selectedView: View? = null
         rows.forEachIndexed { i, rowText ->
-            val isSel = i == selected
-            body.addView(mono(if (isSel) 17f else 15f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
+            val isSel = i == sel
+            val rowView = mono(if (isSel) 17f else 15f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
                 text = rowText
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
@@ -81,14 +85,18 @@ class InboxHudView @JvmOverloads constructor(
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     topMargin = px(3)
                 }
-            })
+            }
+            if (isSel) selectedView = rowView
+            list.addView(rowView)
         }
+        addScrollableList(list, selectedView)
     }
 
     /** A chat-list row with an optional leading brand icon (0 = no icon). */
     class Row(val iconRes: Int, val text: String)
 
-    /** Header + windowed list where each row may carry a leading channel logo. */
+    /** Header + scrollable list where each row may carry a leading channel logo.
+     *  The list scrolls to keep the selected row on screen for long inboxes. */
     fun renderChatList(headerText: String, rows: List<Row>, selected: Int, hintText: String) {
         header.text = headerText
         hint.text = hintText
@@ -97,12 +105,14 @@ class InboxHudView @JvmOverloads constructor(
         body.removeAllViews()
         if (rows.isEmpty()) {
             body.addView(mono(16f, COLOR_SECONDARY).apply {
-                text = "(vazio)"
+                text = context.getString(R.string.hud_empty)
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
             })
             return
         }
         val sel = selected.coerceIn(0, rows.size - 1)
+        val list = LinearLayout(context).apply { orientation = VERTICAL }
+        var selectedView: View? = null
         rows.forEachIndexed { i, row ->
             val isSel = i == sel
             val color = if (isSel) COLOR_PRIMARY else COLOR_SECONDARY
@@ -127,7 +137,25 @@ class InboxHudView @JvmOverloads constructor(
                 ellipsize = TextUtils.TruncateAt.END
                 if (isSel) setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
             })
-            body.addView(rowView)
+            if (isSel) selectedView = rowView
+            list.addView(rowView)
+        }
+        addScrollableList(list, selectedView)
+    }
+
+    /** Wrap a row container in a vertical ScrollView filling the body and keep the
+     *  selected row visible by scrolling it toward the middle of the viewport. */
+    private fun addScrollableList(list: LinearLayout, selectedView: View?) {
+        val scroll = ScrollView(context).apply {
+            isVerticalScrollBarEnabled = false
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+            addView(list)
+        }
+        body.addView(scroll)
+        selectedView ?: return
+        scroll.post {
+            val target = selectedView.top - (scroll.height - selectedView.height) / 2
+            scroll.scrollTo(0, target.coerceAtLeast(0))
         }
     }
 
@@ -150,12 +178,12 @@ class InboxHudView @JvmOverloads constructor(
         body.removeAllViews()
         if (texts.isEmpty()) {
             body.addView(mono(15f, COLOR_SECONDARY).apply {
-                text = "(sem mensagens)"
+                text = context.getString(R.string.hud_no_messages)
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
             })
             return
         }
-        if (olderAbove) body.addView(mono(11f, COLOR_DIM).apply { text = "\u2191 mais antigas" })
+        if (olderAbove) body.addView(mono(11f, COLOR_DIM).apply { text = context.getString(R.string.hud_older) })
         texts.forEachIndexed { i, t ->
             val isSel = i == selectedInWindow
             body.addView(mono(if (isSel) 15f else 14f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
@@ -170,7 +198,7 @@ class InboxHudView @JvmOverloads constructor(
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(3) }
             })
         }
-        if (newerBelow) body.addView(mono(11f, COLOR_DIM).apply { text = "\u2193 mais recentes" })
+        if (newerBelow) body.addView(mono(11f, COLOR_DIM).apply { text = context.getString(R.string.hud_newer) })
     }
 
     /** Expanded single-message reader: full text in a scrollable view. */
