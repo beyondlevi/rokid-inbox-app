@@ -39,6 +39,7 @@ class TelegramBridge {
       type: this.chatType(d),
       unreadCount: d.unreadCount ?? 0,
       lastMessageDate: d.date ? new Date(d.date * 1000).toISOString() : null,
+      lastMessagePreview: this.dialogPreview(d),
       isPinned: Boolean(d.pinned),
     }))
   }
@@ -125,6 +126,13 @@ class TelegramBridge {
     if (d.isChannel) return 'channel'
     if (d.isGroup) return 'group'
     return 'user'
+  }
+
+  dialogPreview(d) {
+    const m = d.message
+    if (!m) return ''
+    const text = m.message || (m.media ? this.mediaTag(m) || '' : '')
+    return String(text).replace(/\s+/g, ' ').trim().slice(0, 120)
   }
 
   mapMessage(m) {

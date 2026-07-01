@@ -87,6 +87,7 @@ class GmailService(
                     type = ChatType.USER,
                     unreadCount = if (unread) 1 else 0,
                     lastMessageDate = last.longOrNull("internalDate")?.let { Instant.ofEpochMilli(it).toString() },
+                    lastMessagePreview = oneLine(t.str("snippet")).take(120),
                 )
             }.getOrNull()
         }

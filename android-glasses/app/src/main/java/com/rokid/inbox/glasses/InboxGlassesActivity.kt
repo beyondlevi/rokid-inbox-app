@@ -349,7 +349,7 @@ class InboxGlassesActivity : AppCompatActivity() {
         }
         val rows = ArrayList<InboxHudView.Row>()
         rows += InboxHudView.Row(0, getString(R.string.menu_row))
-        chats.forEach { rows += InboxHudView.Row(iconFor(it.channel), chatRowText(it)) }
+        chats.forEach { rows += InboxHudView.Row(iconFor(it.channel), chatRowText(it), chatRowSubtitle(it)) }
         inboxIdx = inboxIdx.coerceIn(0, rows.size - 1)
         val ctx = "${filterLabel()} · ${chats.size}"
         hud.renderChatList(header(ctx), rows, inboxIdx, getString(R.string.hint_nav_open_exit))
@@ -372,7 +372,7 @@ class InboxGlassesActivity : AppCompatActivity() {
             return
         }
         searchIdx = searchIdx.coerceIn(0, searchResults.size - 1)
-        val rows = searchResults.map { InboxHudView.Row(iconFor(it.channel), chatRowText(it)) }
+        val rows = searchResults.map { InboxHudView.Row(iconFor(it.channel), chatRowText(it), chatRowSubtitle(it)) }
         hud.renderChatList(header(getString(R.string.search_ctx_fmt, searchResults.size)), rows, searchIdx, getString(R.string.hint_nav_open_menu))
     }
 
@@ -830,6 +830,23 @@ class InboxGlassesActivity : AppCompatActivity() {
         return oneLine("$prefix${c.name}$type$unread")
     }
 
+    /** Second row line: "HH:mm | first characters of the last message". */
+    private fun chatRowSubtitle(c: Chat): String {
+        val time = formatClock(c.lastMessageDate)
+        val preview = oneLine(c.lastMessagePreview)
+        return when {
+            time.isBlank() && preview.isBlank() -> ""
+            time.isBlank() -> preview
+            preview.isBlank() -> time
+            else -> "$time | $preview"
+        }
+    }
+
+    private fun formatClock(iso: String?): String {
+        iso ?: return ""
+        return runCatching { Instant.parse(iso).atZone(ZoneId.systemDefault()).format(CLOCK_FMT) }.getOrDefault("")
+    }
+
     private fun who(m: Message): String = if (m.isOutgoing) getString(R.string.who_me) else m.senderName.ifBlank { getString(R.string.who_unknown) }
 
     private fun messageBody(m: Message): String = when {
@@ -890,6 +907,7 @@ class InboxGlassesActivity : AppCompatActivity() {
         private const val CONV_CHARS_PER_LINE = 32
         private val SPINNER = listOf("|", "/", "-", "\\")
         private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm")
+        private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
         private val EMOJIS = listOf(
             "\uD83D\uDC4D" to R.string.emoji_like,
             "\u2764\uFE0F" to R.string.emoji_love,

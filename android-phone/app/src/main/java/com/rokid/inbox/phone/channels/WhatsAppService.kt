@@ -194,6 +194,8 @@ class WhatsAppService(
             c.str("name"), c.str("pushName"), c.str("subject"),
             contactName, lastSenderName, fallbackName(jid, type),
         )
+        val lastContent = lastMessage.optObj("message")
+        val preview = previewText(textOf(lastContent).ifBlank { mediaTag(lastContent, lastMessage.str("messageType")).orEmpty() })
         return Chat(
             channel = ChannelKind.WHATSAPP,
             boxId = boxId,
@@ -202,6 +204,7 @@ class WhatsAppService(
             type = type,
             unreadCount = (c.intOrNull("unreadCount") ?: c.intOrNull("unreadMessages") ?: 0),
             lastMessageDate = lastDate,
+            lastMessagePreview = preview,
         )
     }
 
@@ -324,6 +327,8 @@ class WhatsAppService(
         }
 
         fun firstNonBlank(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
+
+        fun previewText(s: String): String = s.replace(Regex("\\s+"), " ").trim().take(120)
 
         fun com.google.gson.JsonElement.asBooleanOrFalse(): Boolean =
             runCatching { if (isJsonPrimitive) asBoolean else false }.getOrDefault(false)

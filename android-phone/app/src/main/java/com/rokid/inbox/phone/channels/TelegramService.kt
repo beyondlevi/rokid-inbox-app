@@ -71,6 +71,7 @@ class TelegramService(
                 type = parseType(c.str("type")),
                 unreadCount = c.intOrNull("unreadCount") ?: 0,
                 lastMessageDate = c.str("lastMessageDate").ifBlank { null },
+                lastMessagePreview = c.str("lastMessagePreview"),
             )
         }
     }

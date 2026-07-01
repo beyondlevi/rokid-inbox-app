@@ -52,6 +52,8 @@ data class Chat(
     val type: ChatType = ChatType.USER,
     val unreadCount: Int = 0,
     val lastMessageDate: String? = null,
+    /** Short preview of the last message (first characters), for the chat list. */
+    val lastMessagePreview: String = "",
     val boxLabel: String = "",
 )
 

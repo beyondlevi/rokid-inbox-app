@@ -65,6 +65,7 @@ class GitHubService(
                 type = ChatType.CHANNEL,
                 unreadCount = 0,
                 lastMessageDate = item.str("updated_at").ifBlank { null },
+                lastMessagePreview = item.str("body").replace(Regex("\\s+"), " ").trim().take(120),
             )
         }
     }
