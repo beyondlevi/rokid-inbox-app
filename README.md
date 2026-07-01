@@ -4,6 +4,30 @@
   Multi-channel inbox on Rokid AR glasses, streamed live from your phone over Bluetooth.
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2ea44f.svg" alt="License: MIT"></a>
+  <img src="https://img.shields.io/badge/platform-Android-2ea44f.svg" alt="Platform: Android">
+  <img src="https://img.shields.io/badge/Kotlin-2.1-2ea44f.svg" alt="Kotlin 2.1">
+</p>
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/glasses-menu.png" width="31%" alt="Glasses — menu with channel logos">
+  &nbsp;
+  <img src="docs/screenshots/glasses-inbox.png" width="31%" alt="Glasses — unified inbox">
+  &nbsp;
+  <img src="docs/screenshots/glasses-conversation.png" width="31%" alt="Glasses — conversation">
+</p>
+<p align="center"><em>On the glasses — menu with channel logos · unified inbox · conversation (contacts blurred)</em></p>
+
+<p align="center">
+  <img src="docs/screenshots/phone-home.png" width="28%" alt="Phone — host status">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/phone-settings.png" width="28%" alt="Phone — inbox settings">
+</p>
+<p align="center"><em>On the phone — host status · inbox settings</em></p>
+
 ---
 
 ## What it is
@@ -119,3 +143,7 @@ Release builds read signing from env vars or Gradle properties:
 `ANDROID_KEY_PASSWORD`, and optional `ROKID_INBOX_VERSION_NAME` /
 `ROKID_INBOX_VERSION_CODE`. `assembleRelease` falls back to the debug keystore
 when signing values are absent; partial configuration fails the build.
+
+## License
+
+Released under the [MIT License](LICENSE).
