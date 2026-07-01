@@ -72,7 +72,7 @@ class InboxHudView @JvmOverloads constructor(
         if (range.first > 0) body.addView(chevron("\u2191 +${range.first}"))
         for (i in range) {
             val isSel = i == sel
-            body.addView(mono(if (isSel) 17f else 15f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
+            body.addView(mono(if (isSel) 15f else 13f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
                 text = rows[i]
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
@@ -80,7 +80,7 @@ class InboxHudView @JvmOverloads constructor(
                     setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
                     setBackgroundColor(COLOR_SELECTED_BG)
                 }
-                setPadding(px(6), px(6), px(6), px(6))
+                setPadding(px(6), px(5), px(6), px(5))
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     topMargin = px(3)
                 }
@@ -121,14 +121,14 @@ class InboxHudView @JvmOverloads constructor(
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
                 if (isSel) setBackgroundColor(COLOR_SELECTED_BG)
-                setPadding(px(6), px(6), px(6), px(6))
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(3) }
+                setPadding(px(6), px(4), px(6), px(4))
+                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(2) }
             }
             if (row.iconRes != 0) {
                 rowView.addView(ImageView(context).apply {
                     setImageResource(row.iconRes)
                     setColorFilter(color, PorterDuff.Mode.SRC_IN)
-                    val s = px(if (isSel) 20 else 17)
+                    val s = px(if (isSel) 17 else 14)
                     layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = px(8) }
                 })
             }
@@ -136,14 +136,14 @@ class InboxHudView @JvmOverloads constructor(
                 orientation = VERTICAL
                 layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
             }
-            textCol.addView(mono(if (isSel) 17f else 15f, color).apply {
+            textCol.addView(mono(if (isSel) 14f else 12f, color).apply {
                 text = row.text
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 if (isSel) setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
             })
             if (row.subtitle.isNotBlank()) {
-                textCol.addView(mono(12f, COLOR_DIM).apply {
+                textCol.addView(mono(10f, COLOR_DIM).apply {
                     text = row.subtitle
                     maxLines = 1
                     ellipsize = TextUtils.TruncateAt.END
@@ -340,9 +340,9 @@ class InboxHudView @JvmOverloads constructor(
     private fun px(dp: Int): Int = (dp * resources.displayMetrics.density + 0.5f).toInt()
 
     private companion object {
-        private const val DEFAULT_VISIBLE_ROWS = 5
-        private const val ROW_HEIGHT_1LINE_DP = 34
-        private const val ROW_HEIGHT_2LINE_DP = 52
+        private const val DEFAULT_VISIBLE_ROWS = 6
+        private const val ROW_HEIGHT_1LINE_DP = 28
+        private const val ROW_HEIGHT_2LINE_DP = 40
         private val COLOR_PRIMARY = Color.parseColor("#FFE7A3")
         private val COLOR_SECONDARY = Color.parseColor("#D5BB7A")
         private val COLOR_DIM = Color.parseColor("#A48B59")

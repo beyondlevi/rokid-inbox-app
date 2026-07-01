@@ -195,7 +195,7 @@ class WhatsAppService(
             contactName, lastSenderName, fallbackName(jid, type),
         )
         val lastContent = lastMessage.optObj("message")
-        val preview = previewText(textOf(lastContent).ifBlank { mediaTag(lastContent, lastMessage.str("messageType")).orEmpty() })
+        val preview = previewText(chatPreview(lastContent, lastMessage.str("messageType")))
         return Chat(
             channel = ChannelKind.WHATSAPP,
             boxId = boxId,
@@ -329,6 +329,16 @@ class WhatsAppService(
         fun firstNonBlank(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
 
         fun previewText(s: String): String = s.replace(Regex("\\s+"), " ").trim().take(120)
+
+        /** Chat-list preview: real text, the reaction emoji, or a media label. */
+        fun chatPreview(content: JsonObject?, messageType: String): String {
+            content ?: return ""
+            val reaction = content.optObj("reactionMessage").str("text")
+            if (reaction.isNotBlank()) return reaction
+            val text = textOf(content)
+            if (text.isNotBlank()) return text
+            return mediaTag(content, messageType).orEmpty()
+        }
 
         fun com.google.gson.JsonElement.asBooleanOrFalse(): Boolean =
             runCatching { if (isJsonPrimitive) asBoolean else false }.getOrDefault(false)
