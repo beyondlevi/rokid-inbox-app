@@ -8,7 +8,6 @@ import android.graphics.Typeface
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.Gravity
-import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -69,12 +68,12 @@ class InboxHudView @JvmOverloads constructor(
             return
         }
         val sel = selected.coerceIn(0, rows.size - 1)
-        val list = LinearLayout(context).apply { orientation = VERTICAL }
-        var selectedView: View? = null
-        rows.forEachIndexed { i, rowText ->
+        val range = windowRange(rows.size, sel)
+        if (range.first > 0) body.addView(chevron("\u2191 +${range.first}"))
+        for (i in range) {
             val isSel = i == sel
-            val rowView = mono(if (isSel) 17f else 15f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
-                text = rowText
+            body.addView(mono(if (isSel) 17f else 15f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
+                text = rows[i]
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 if (isSel) {
@@ -85,18 +84,17 @@ class InboxHudView @JvmOverloads constructor(
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     topMargin = px(3)
                 }
-            }
-            if (isSel) selectedView = rowView
-            list.addView(rowView)
+            })
         }
-        addScrollableList(list, selectedView)
+        if (range.last < rows.size - 1) body.addView(chevron("\u2193 +${rows.size - 1 - range.last}"))
     }
 
     /** A chat-list row with an optional leading brand icon (0 = no icon). */
     class Row(val iconRes: Int, val text: String)
 
-    /** Header + scrollable list where each row may carry a leading channel logo.
-     *  The list scrolls to keep the selected row on screen for long inboxes. */
+    /** Header + windowed list where each row may carry a leading channel logo.
+     *  Only the rows around the selection are drawn (with ↑/↓ counters), so long
+     *  inboxes stay reachable without a flickering full-list rebuild + scroll. */
     fun renderChatList(headerText: String, rows: List<Row>, selected: Int, hintText: String) {
         header.text = headerText
         hint.text = hintText
@@ -111,9 +109,9 @@ class InboxHudView @JvmOverloads constructor(
             return
         }
         val sel = selected.coerceIn(0, rows.size - 1)
-        val list = LinearLayout(context).apply { orientation = VERTICAL }
-        var selectedView: View? = null
-        rows.forEachIndexed { i, row ->
+        val range = windowRange(rows.size, sel)
+        if (range.first > 0) body.addView(chevron("\u2191 +${range.first}"))
+        for (i in range) {
             val isSel = i == sel
             val color = if (isSel) COLOR_PRIMARY else COLOR_SECONDARY
             val rowView = LinearLayout(context).apply {
@@ -123,40 +121,55 @@ class InboxHudView @JvmOverloads constructor(
                 setPadding(px(6), px(6), px(6), px(6))
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(3) }
             }
-            if (row.iconRes != 0) {
+            if (rows[i].iconRes != 0) {
                 rowView.addView(ImageView(context).apply {
-                    setImageResource(row.iconRes)
+                    setImageResource(rows[i].iconRes)
                     setColorFilter(color, PorterDuff.Mode.SRC_IN)
                     val s = px(if (isSel) 20 else 17)
                     layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = px(8) }
                 })
             }
             rowView.addView(mono(if (isSel) 17f else 15f, color).apply {
-                text = row.text
+                text = rows[i].text
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 if (isSel) setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
             })
-            if (isSel) selectedView = rowView
-            list.addView(rowView)
+            body.addView(rowView)
         }
-        addScrollableList(list, selectedView)
+        if (range.last < rows.size - 1) body.addView(chevron("\u2193 +${rows.size - 1 - range.last}"))
     }
 
-    /** Wrap a row container in a vertical ScrollView filling the body and keep the
-     *  selected row visible by scrolling it toward the middle of the viewport. */
-    private fun addScrollableList(list: LinearLayout, selectedView: View?) {
-        val scroll = ScrollView(context).apply {
-            isVerticalScrollBarEnabled = false
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            addView(list)
+    /** A dim single-line "N more above/below" counter row. */
+    private fun chevron(text: String) = mono(11f, COLOR_DIM).apply {
+        this.text = text
+        setPadding(px(6), px(2), px(6), px(2))
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+    }
+
+    /**
+     * Window of row indices to draw around [selected], sized to the body height so
+     * the selection is always visible. Reserves two lines for the ↑/↓ counters.
+     */
+    private fun windowRange(total: Int, selected: Int): IntRange {
+        val fit = visibleRowCount()
+        if (total <= fit) return 0 until total
+        val maxRows = (fit - 2).coerceAtLeast(3)
+        var start = selected - maxRows / 2
+        if (start < 0) start = 0
+        var end = start + maxRows - 1
+        if (end > total - 1) {
+            end = total - 1
+            start = (end - maxRows + 1).coerceAtLeast(0)
         }
-        body.addView(scroll)
-        selectedView ?: return
-        scroll.post {
-            val target = selectedView.top - (scroll.height - selectedView.height) / 2
-            scroll.scrollTo(0, target.coerceAtLeast(0))
-        }
+        return start..end
+    }
+
+    /** How many list rows fit in the body right now (falls back before layout). */
+    private fun visibleRowCount(): Int {
+        val h = if (body.height > 0) body.height else body.measuredHeight
+        if (h <= 0) return DEFAULT_VISIBLE_ROWS
+        return (h / px(ROW_HEIGHT_DP)).coerceIn(4, 24)
     }
 
     /**
@@ -312,6 +325,8 @@ class InboxHudView @JvmOverloads constructor(
     private fun px(dp: Int): Int = (dp * resources.displayMetrics.density + 0.5f).toInt()
 
     private companion object {
+        private const val DEFAULT_VISIBLE_ROWS = 6
+        private const val ROW_HEIGHT_DP = 36
         private val COLOR_PRIMARY = Color.parseColor("#FFE7A3")
         private val COLOR_SECONDARY = Color.parseColor("#D5BB7A")
         private val COLOR_DIM = Color.parseColor("#A48B59")
