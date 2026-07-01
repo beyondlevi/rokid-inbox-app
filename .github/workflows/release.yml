@@ -1,0 +1,103 @@
+name: Release APKs
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    env:
+      CI: "true"
+      ROKID_INBOX_VERSION_NAME: ${{ github.ref_name }}
+      ROKID_INBOX_VERSION_CODE: ${{ github.run_number }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Detect Android signing mode
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          $required = @(
+            "ANDROID_KEYSTORE_BASE64",
+            "ANDROID_KEYSTORE_PASSWORD",
+            "ANDROID_KEY_ALIAS",
+            "ANDROID_KEY_PASSWORD"
+          )
+          $present = $required | Where-Object {
+            $value = (Get-Item -Path "Env:$_" -ErrorAction SilentlyContinue).Value
+            -not [string]::IsNullOrWhiteSpace($value)
+          }
+
+          if ($present.Count -eq 0) {
+            "HAS_RELEASE_SIGNING=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Warning "No release signing secrets configured. Falling back to the debug keystore for release builds."
+            exit 0
+          }
+
+          if ($present.Count -ne $required.Count) {
+            $missing = $required | Where-Object { $_ -notin $present }
+            throw "Release signing secrets are partially configured. Missing: $($missing -join ', ')"
+          }
+
+          "HAS_RELEASE_SIGNING=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Write release keystore
+        if: env.HAS_RELEASE_SIGNING == 'true'
+        shell: pwsh
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          $keystorePath = Join-Path $env:RUNNER_TEMP "rokid-inbox-release.keystore"
+          [System.IO.File]::WriteAllBytes(
+            $keystorePath,
+            [System.Convert]::FromBase64String($env:ANDROID_KEYSTORE_BASE64)
+          )
+          "ANDROID_KEYSTORE_PATH=$keystorePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run phone unit tests
+        working-directory: android-phone
+        run: .\gradlew.bat --no-daemon testDebugUnitTest
+
+      - name: Run glasses unit tests
+        working-directory: android-glasses
+        run: .\gradlew.bat --no-daemon testDebugUnitTest
+
+      - name: Build phone release APK
+        working-directory: android-phone
+        run: .\gradlew.bat --no-daemon assembleRelease
+
+      - name: Build glasses release APK
+        working-directory: android-glasses
+        run: .\gradlew.bat --no-daemon assembleRelease
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            android-phone/app/build/outputs/apk/release/inbox-phone-release.apk
+            android-glasses/app/build/outputs/apk/release/inbox-glasses-release.apk

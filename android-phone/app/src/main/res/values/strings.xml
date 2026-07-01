@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Rokid Inbox Phone</string>
+    <string name="notification_channel_name">Rokid Inbox Bluetooth</string>
+    <string name="notification_text">Inbox Bluetooth runtime is active.</string>
+</resources>

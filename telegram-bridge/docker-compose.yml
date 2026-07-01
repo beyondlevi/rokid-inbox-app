@@ -1,0 +1,16 @@
+# Telegram bridge — runs as its own compose project next to Evolution.
+# On the VM: cd /opt/evolution/telegram-bridge && docker compose up -d --build
+# Bound to localhost only; exposed publicly via nginx at https://<domain>/tg/
+services:
+  telegram-bridge:
+    build: .
+    container_name: telegram_bridge
+    restart: always
+    env_file: .env
+    ports:
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - tg_session:/data
+
+volumes:
+  tg_session:
