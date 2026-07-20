@@ -1,5 +1,6 @@
 package com.rokid.inbox.glasses
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Color
@@ -8,15 +9,26 @@ import android.graphics.Typeface
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewTreeObserver
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 
 /**
- * Amber-monospace-on-black HUD for the Rokid see-through display, following the
- * amber-on-black visual style. Renders three page kinds: a windowed list, a full
- * text block, and a text block with a small option list (the reply preview).
+ * Amber-monospace-on-black HUD for the Rokid see-through display, redesigned to
+ * use the full field of view. Lists and the conversation reader render every
+ * row into a full-height [PassiveScrollView] and keep the selected row visible
+ * with a programmatic, clamped scroll (instead of drawing a small windowed
+ * subset that left the lower part of the canvas empty). This also lets the R08
+ * Access Bridge page long content via the scrollable's accessibility scroll
+ * actions.
+ *
+ * Renders: a windowed list, a chat list with leading logos, a conversation
+ * feed, an expanded scrollable reader, a full-screen image, and status/option
+ * screens.
  */
 class InboxHudView @JvmOverloads constructor(
     context: Context,
@@ -26,11 +38,24 @@ class InboxHudView @JvmOverloads constructor(
     private val header: TextView
     private val body: LinearLayout
     private val hint: TextView
-    private var detailScroll: ScrollView? = null
+
+    // The scroll container currently mounted in [body] (list / conversation /
+    // detail), plus the selected row so we can keep it in view after layout.
+    private var activeScroll: ScrollView? = null
+    private var selectedView: View? = null
 
     init {
         orientation = VERTICAL
         setBackgroundColor(Color.BLACK)
+        // Focus discipline for the see-through display: the framework paints a
+        // default focus highlight over whichever view holds focus, which shows
+        // up as a bright opaque wash on this display. Block focus for every
+        // descendant and let the HUD root absorb focus with the highlight off,
+        // so it never falls back to the decor view either.
+        descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+        isFocusable = true
+        isFocusableInTouchMode = true
+        defaultFocusHighlightEnabled = false
         setPadding(px(14), px(10), px(14), px(8))
 
         header = mono(13f, COLOR_DIM).apply {
@@ -54,26 +79,62 @@ class InboxHudView @JvmOverloads constructor(
         addView(hint)
     }
 
+    /**
+     * A ScrollView that never touches the screen pipeline in ways that break the
+     * see-through display: it ignores touch events entirely (gestures are owned
+     * by the Activity; scrolling is programmatic via clamped scroll) and disables
+     * the overscroll edge effect and focus highlight, both of which render as a
+     * bright opaque wash on the transparent HUD.
+     */
+    private class PassiveScrollView(context: Context) : ScrollView(context) {
+        init {
+            overScrollMode = OVER_SCROLL_NEVER
+            isVerticalScrollBarEnabled = false
+            isHorizontalScrollBarEnabled = false
+            isVerticalFadingEdgeEnabled = false
+            isFocusable = false
+            isFocusableInTouchMode = false
+            defaultFocusHighlightEnabled = false
+            descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+            setBackgroundColor(Color.BLACK)
+        }
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean = false
+
+        @SuppressLint("ClickableViewAccessibility")
+        override fun onTouchEvent(ev: MotionEvent): Boolean = false
+    }
+
+    private fun passiveScroll(content: View): ScrollView = PassiveScrollView(context).apply {
+        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
+        content.setBackgroundColor(Color.BLACK)
+        addView(content)
+    }
+
+    /** Clears the body and every per-screen scroll/selection registry. */
+    private fun resetBody() {
+        body.gravity = Gravity.TOP
+        body.removeAllViews()
+        activeScroll = null
+        selectedView = null
+    }
+
+    /** Simple full-height list of single-line rows (actions, react, quick…). */
     fun renderList(headerText: String, rows: List<String>, selected: Int, hintText: String) {
         header.text = headerText
         hint.text = hintText
-        body.gravity = Gravity.TOP
-        detailScroll = null
-        body.removeAllViews()
+        resetBody()
         if (rows.isEmpty()) {
-            body.addView(mono(16f, COLOR_SECONDARY).apply {
-                text = context.getString(R.string.hud_empty)
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
-            })
+            body.gravity = Gravity.CENTER
+            body.addView(mono(16f, COLOR_SECONDARY).apply { text = context.getString(R.string.hud_empty) })
             return
         }
         val sel = selected.coerceIn(0, rows.size - 1)
-        val range = windowRange(rows.size, sel, ROW_HEIGHT_1LINE_DP)
-        if (range.first > 0) body.addView(chevron("\u2191 +${range.first}"))
-        for (i in range) {
+        val content = LinearLayout(context).apply { orientation = VERTICAL }
+        rows.forEachIndexed { i, label ->
             val isSel = i == sel
-            body.addView(mono(if (isSel) 15f else 13f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
-                text = rows[i]
+            val v = mono(if (isSel) 15f else 13f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
+                text = label
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 if (isSel) {
@@ -84,184 +145,173 @@ class InboxHudView @JvmOverloads constructor(
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     topMargin = px(3)
                 }
-            })
+            }
+            if (isSel) selectedView = v
+            content.addView(v)
         }
-        if (range.last < rows.size - 1) body.addView(chevron("\u2193 +${rows.size - 1 - range.last}"))
+        mountScroll(content)
     }
 
     /** A chat-list row with an optional leading brand icon (0 = no icon) and an
      *  optional second line (e.g. "HH:mm | last message preview"). */
     class Row(val iconRes: Int, val text: String, val subtitle: String = "")
 
-    /** Header + windowed list where each row may carry a leading channel logo.
-     *  Only the rows around the selection are drawn (with ↑/↓ counters), so long
-     *  inboxes stay reachable without a flickering full-list rebuild + scroll. */
+    /** Header + full-height chat list where each row may carry a leading logo.
+     *  Every row is drawn; the selection is kept visible so long inboxes stay
+     *  reachable and the whole canvas is used. */
     fun renderChatList(headerText: String, rows: List<Row>, selected: Int, hintText: String) {
         header.text = headerText
         hint.text = hintText
-        body.gravity = Gravity.TOP
-        detailScroll = null
-        body.removeAllViews()
+        resetBody()
         if (rows.isEmpty()) {
-            body.addView(mono(16f, COLOR_SECONDARY).apply {
-                text = context.getString(R.string.hud_empty)
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
-            })
+            body.gravity = Gravity.CENTER
+            body.addView(mono(16f, COLOR_SECONDARY).apply { text = context.getString(R.string.hud_empty) })
             return
         }
         val sel = selected.coerceIn(0, rows.size - 1)
-        val twoLine = rows.any { it.subtitle.isNotBlank() }
-        val range = windowRange(rows.size, sel, if (twoLine) ROW_HEIGHT_2LINE_DP else ROW_HEIGHT_1LINE_DP)
-        if (range.first > 0) body.addView(chevron("\u2191 +${range.first}"))
-        for (i in range) {
-            val row = rows[i]
-            val isSel = i == sel
-            val color = if (isSel) COLOR_PRIMARY else COLOR_SECONDARY
-            val rowView = LinearLayout(context).apply {
-                orientation = HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                if (isSel) setBackgroundColor(COLOR_SELECTED_BG)
-                setPadding(px(6), px(4), px(6), px(4))
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(2) }
-            }
-            if (row.iconRes != 0) {
-                rowView.addView(ImageView(context).apply {
-                    setImageResource(row.iconRes)
-                    setColorFilter(color, PorterDuff.Mode.SRC_IN)
-                    val s = px(if (isSel) 17 else 14)
-                    layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = px(8) }
-                })
-            }
-            val textCol = LinearLayout(context).apply {
-                orientation = VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
-            }
-            textCol.addView(mono(if (isSel) 14f else 12f, color).apply {
-                text = row.text
+        val content = LinearLayout(context).apply { orientation = VERTICAL }
+        rows.forEachIndexed { i, row ->
+            val v = buildChatRow(row, i == sel)
+            if (i == sel) selectedView = v
+            content.addView(v)
+        }
+        mountScroll(content)
+    }
+
+    private fun buildChatRow(row: Row, isSel: Boolean): View {
+        val color = if (isSel) COLOR_PRIMARY else COLOR_SECONDARY
+        val rowView = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            if (isSel) setBackgroundColor(COLOR_SELECTED_BG)
+            setPadding(px(6), px(4), px(6), px(4))
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(2) }
+        }
+        if (row.iconRes != 0) {
+            rowView.addView(ImageView(context).apply {
+                setImageResource(row.iconRes)
+                setColorFilter(color, PorterDuff.Mode.SRC_IN)
+                val s = px(if (isSel) 17 else 14)
+                layoutParams = LinearLayout.LayoutParams(s, s).apply { marginEnd = px(8) }
+            })
+        }
+        val textCol = LinearLayout(context).apply {
+            orientation = VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f)
+        }
+        textCol.addView(mono(if (isSel) 14f else 12f, color).apply {
+            text = row.text
+            maxLines = 1
+            ellipsize = TextUtils.TruncateAt.END
+            if (isSel) setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
+        })
+        if (row.subtitle.isNotBlank()) {
+            textCol.addView(mono(10f, COLOR_DIM).apply {
+                text = row.subtitle
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
-                if (isSel) setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
             })
-            if (row.subtitle.isNotBlank()) {
-                textCol.addView(mono(10f, COLOR_DIM).apply {
-                    text = row.subtitle
-                    maxLines = 1
-                    ellipsize = TextUtils.TruncateAt.END
-                })
-            }
-            rowView.addView(textCol)
-            body.addView(rowView)
         }
-        if (range.last < rows.size - 1) body.addView(chevron("\u2193 +${rows.size - 1 - range.last}"))
-    }
-
-    /** A dim single-line "N more above/below" counter row. */
-    private fun chevron(text: String) = mono(11f, COLOR_DIM).apply {
-        this.text = text
-        setPadding(px(6), px(2), px(6), px(2))
-        layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        rowView.addView(textCol)
+        return rowView
     }
 
     /**
-     * Window of row indices to draw around [selected], sized to the body height so
-     * the selection is always visible. Reserves two lines for the ↑/↓ counters.
-     */
-    private fun windowRange(total: Int, selected: Int, rowHeightDp: Int): IntRange {
-        val fit = visibleRowCount(rowHeightDp)
-        if (total <= fit) return 0 until total
-        val maxRows = (fit - 2).coerceAtLeast(3)
-        var start = selected - maxRows / 2
-        if (start < 0) start = 0
-        var end = start + maxRows - 1
-        if (end > total - 1) {
-            end = total - 1
-            start = (end - maxRows + 1).coerceAtLeast(0)
-        }
-        return start..end
-    }
-
-    /** How many rows of the given height fit in the body now (fallback before layout). */
-    private fun visibleRowCount(rowHeightDp: Int): Int {
-        val h = if (body.height > 0) body.height else body.measuredHeight
-        if (h <= 0) return DEFAULT_VISIBLE_ROWS
-        return (h / px(rowHeightDp)).coerceIn(3, 24)
-    }
-
-    /**
-     * Conversation view: fills the screen with full messages (already capped and
-     * windowed by the caller), the selected one highlighted, oldest at top.
+     * Conversation view: a full-height scrolling feed of complete messages
+     * (oldest at top, newest at bottom), the selected one highlighted and kept
+     * in view. An optional "older above" marker hints that a fling up at the top
+     * loads more history.
      */
     fun renderConversation(
         headerText: String,
         texts: List<String>,
-        selectedInWindow: Int,
+        selected: Int,
         olderAbove: Boolean,
-        newerBelow: Boolean,
         hintText: String,
     ) {
         header.text = headerText
         hint.text = hintText
-        body.gravity = Gravity.CENTER_VERTICAL
-        detailScroll = null
-        body.removeAllViews()
+        resetBody()
         if (texts.isEmpty()) {
-            body.addView(mono(15f, COLOR_SECONDARY).apply {
-                text = context.getString(R.string.hud_no_messages)
-                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(8) }
-            })
+            body.gravity = Gravity.CENTER
+            body.addView(mono(15f, COLOR_SECONDARY).apply { text = context.getString(R.string.hud_no_messages) })
             return
         }
-        if (olderAbove) body.addView(mono(11f, COLOR_DIM).apply { text = context.getString(R.string.hud_older) })
+        val sel = selected.coerceIn(0, texts.size - 1)
+        val content = LinearLayout(context).apply { orientation = VERTICAL }
+        if (olderAbove) content.addView(mono(11f, COLOR_DIM).apply {
+            text = context.getString(R.string.hud_older)
+            setPadding(px(6), px(2), px(6), px(4))
+        })
         texts.forEachIndexed { i, t ->
-            val isSel = i == selectedInWindow
-            body.addView(mono(if (isSel) 15f else 14f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
+            val isSel = i == sel
+            val v = mono(if (isSel) 15f else 14f, if (isSel) COLOR_PRIMARY else COLOR_SECONDARY).apply {
                 text = t
-                maxLines = 9
-                ellipsize = TextUtils.TruncateAt.END
                 if (isSel) {
                     setTypeface(Typeface.MONOSPACE, Typeface.BOLD)
                     setBackgroundColor(COLOR_SELECTED_BG)
                 }
                 setPadding(px(6), px(5), px(6), px(5))
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply { topMargin = px(3) }
-            })
+            }
+            if (isSel) selectedView = v
+            content.addView(v)
         }
-        if (newerBelow) body.addView(mono(11f, COLOR_DIM).apply { text = context.getString(R.string.hud_newer) })
+        mountScroll(content)
     }
 
-    /** Expanded single-message reader: full text in a scrollable view. */
+    /** Mount [content] in a full-height passive scroll and keep the selection
+     *  visible once the view is laid out. */
+    private fun mountScroll(content: View) {
+        val scroll = passiveScroll(content)
+        activeScroll = scroll
+        body.addView(scroll)
+        afterLayout(scroll) { ensureSelectionVisible() }
+    }
+
+    private fun ensureSelectionVisible() {
+        val scroll = activeScroll ?: return
+        val sel = selectedView ?: return
+        val y = scroll.scrollY
+        val h = scroll.height
+        if (h <= 0) return
+        val content = scroll.getChildAt(0) ?: return
+        val max = (content.height - h).coerceAtLeast(0)
+        when {
+            sel.top < y -> scroll.smoothScrollTo(0, (sel.top - px(6)).coerceIn(0, max))
+            sel.bottom > y + h -> scroll.smoothScrollTo(0, (sel.bottom - h + px(6)).coerceIn(0, max))
+        }
+    }
+
+    /** Expanded single-message reader: full text in a passive scrollable view. */
     fun renderDetail(headerText: String, fullText: String, hintText: String) {
         header.text = headerText
         hint.text = hintText
-        body.gravity = Gravity.TOP
-        body.removeAllViews()
+        resetBody()
         val text = mono(15f, COLOR_PRIMARY).apply {
             this.text = fullText
             setPadding(px(6), px(4), px(6), px(4))
         }
-        val scroll = ScrollView(context).apply {
-            isVerticalScrollBarEnabled = true
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f)
-            addView(text)
-        }
-        detailScroll = scroll
-        body.addView(scroll)
+        mountScroll(text)
     }
 
-    /** Scroll the open detail message by ~80% of its height (dir: +1 down, -1 up). */
+    /** Scroll the open detail message by ~80% of its height (dir: +1 down, -1 up),
+     *  clamped so it never engages the overscroll edge effect. */
     fun scrollDetailBy(dir: Int) {
-        val scroll = detailScroll ?: return
+        val scroll = activeScroll ?: return
+        val content = scroll.getChildAt(0) ?: return
         val amount = (scroll.height * 0.8f).toInt().coerceAtLeast(px(40))
-        scroll.smoothScrollBy(0, dir * amount)
+        val max = (content.height - scroll.height).coerceAtLeast(0)
+        val target = (scroll.scrollY + dir * amount).coerceIn(0, max)
+        if (target != scroll.scrollY) scroll.smoothScrollTo(0, target)
     }
 
     /** Full-screen image view for a photo message, with an optional caption. */
     fun renderImage(headerText: String, bitmap: Bitmap, caption: String, hintText: String) {
         header.text = headerText
         hint.text = hintText
+        resetBody()
         body.gravity = Gravity.CENTER
-        body.removeAllViews()
-        detailScroll = null
         body.addView(ImageView(context).apply {
             setImageBitmap(bitmap)
             adjustViewBounds = true
@@ -279,11 +329,10 @@ class InboxHudView @JvmOverloads constructor(
     }
 
     fun renderText(headerText: String, bodyText: String, hintText: String, big: Boolean = false) {
-        detailScroll = null
-        body.gravity = Gravity.TOP
         header.text = headerText
         hint.text = hintText
-        body.removeAllViews()
+        resetBody()
+        if (big) body.gravity = Gravity.CENTER
         body.addView(mono(if (big) 22f else 15f, COLOR_PRIMARY).apply {
             text = bodyText
             if (big) {
@@ -305,8 +354,7 @@ class InboxHudView @JvmOverloads constructor(
     ) {
         header.text = headerText
         hint.text = hintText
-        body.gravity = Gravity.TOP
-        body.removeAllViews()
+        resetBody()
         body.addView(mono(15f, COLOR_PRIMARY).apply {
             text = bodyText
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = px(6) }
@@ -329,6 +377,15 @@ class InboxHudView @JvmOverloads constructor(
         }
     }
 
+    private inline fun afterLayout(view: View, crossinline action: () -> Unit) {
+        view.viewTreeObserver.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+            override fun onGlobalLayout() {
+                view.viewTreeObserver.removeOnGlobalLayoutListener(this)
+                action()
+            }
+        })
+    }
+
     private fun mono(sizeSp: Float, color: Int) = TextView(context).apply {
         textSize = sizeSp
         setTextColor(color)
@@ -340,9 +397,6 @@ class InboxHudView @JvmOverloads constructor(
     private fun px(dp: Int): Int = (dp * resources.displayMetrics.density + 0.5f).toInt()
 
     private companion object {
-        private const val DEFAULT_VISIBLE_ROWS = 6
-        private const val ROW_HEIGHT_1LINE_DP = 28
-        private const val ROW_HEIGHT_2LINE_DP = 40
         private val COLOR_PRIMARY = Color.parseColor("#FFE7A3")
         private val COLOR_SECONDARY = Color.parseColor("#D5BB7A")
         private val COLOR_DIM = Color.parseColor("#A48B59")

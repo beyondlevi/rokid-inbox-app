@@ -3,6 +3,9 @@
         <item name="android:windowBackground">@android:color/black</item>
         <item name="android:statusBarColor">@android:color/black</item>
         <item name="android:navigationBarColor">@android:color/black</item>
+        <!-- The platform's default focus highlight renders as an opaque wash
+             on the see-through display; disable it app-wide (API 26+). -->
+        <item name="android:defaultFocusHighlightEnabled">false</item>
     </style>
 
     <style name="Theme.RokidInboxGlasses.Fullscreen" parent="Theme.RokidInboxGlasses">

@@ -383,16 +383,13 @@ class InboxGlassesActivity : AppCompatActivity() {
             else hud.renderText(header(chat.name), getString(R.string.conv_empty), if (canSend) getString(R.string.hint_reply_back) else getString(R.string.hint_back))
             return
         }
-        val range = computeConvWindow()
-        val texts = range.map { messageFull(messages[it]) }
-        val selInWin = (msgSelected - range.first).coerceIn(0, texts.size - 1)
+        val texts = messages.map { messageFull(it) }
         val ctx = oneLine(chat.name) + if (convLoading) getString(R.string.conv_loading_suffix) else getString(R.string.conv_ctx_fmt, msgSelected + 1, messages.size)
         hud.renderConversation(
             header(ctx),
             texts,
-            selInWin,
-            olderAbove = range.first > 0,
-            newerBelow = range.last < messages.lastIndex,
+            msgSelected.coerceIn(0, messages.lastIndex),
+            olderAbove = !atStart,
             hintText = getString(R.string.hint_nav_open_back),
         )
     }
@@ -414,49 +411,10 @@ class InboxGlassesActivity : AppCompatActivity() {
         }
     }
 
+    /** Fill the screen with as many full messages as fit around the selection. */
     private fun renderDescription() {
         val body = descError?.let { getString(R.string.desc_error_fmt, it) } ?: descText.ifBlank { getString(R.string.desc_empty) }
         hud.renderDetail(header(getString(R.string.hdr_description)), body, getString(R.string.hint_scroll_back))
-    }
-
-    /** Fill the screen with as many full messages as fit around the selection. */
-    private fun computeConvWindow(): IntRange {
-        val n = messages.size
-        if (n == 0) return IntRange.EMPTY
-        val sel = msgSelected.coerceIn(0, n - 1)
-        var start = sel
-        var end = sel
-        var budget = CONV_LINE_BUDGET - convLines(sel)
-        var down = true
-        while (budget > 0) {
-            val canDown = end < n - 1
-            val canUp = start > 0
-            if (!canDown && !canUp) break
-            val goDown = when {
-                down && canDown -> true
-                !down && canUp -> false
-                canDown -> true
-                else -> false
-            }
-            val idx = if (goDown) end + 1 else start - 1
-            val l = convLines(idx)
-            if (l > budget) {
-                val otherIdx = if (goDown) (if (canUp) start - 1 else -1) else (if (canDown) end + 1 else -1)
-                if (otherIdx < 0 || convLines(otherIdx) > budget) break
-                if (goDown) { start--; budget -= convLines(start) } else { end++; budget -= convLines(end) }
-                down = !down
-                continue
-            }
-            if (goDown) end++ else start--
-            budget -= l
-            down = !down
-        }
-        return start..end
-    }
-
-    private fun convLines(i: Int): Int {
-        val len = minOf(messageBody(messages[i]).length, MSG_CHAR_CAP)
-        return 1 + maxOf(1, kotlin.math.ceil(len / CONV_CHARS_PER_LINE.toDouble()).toInt())
     }
 
     private fun renderQuick() {
@@ -490,8 +448,10 @@ class InboxGlassesActivity : AppCompatActivity() {
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         return when (event.keyCode) {
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN -> { moveSelection(1); true }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_VOLUME_UP -> { moveSelection(-1); true }
+            // DPAD/VOLUME plus the raw R08 ring navigation keycodes (183 = next,
+            // 184 = prev) the Access Bridge / ring emits in Stable mode.
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN, RING_NEXT -> { moveSelection(1); true }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_VOLUME_UP, RING_PREV -> { moveSelection(-1); true }
             KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> { activate(); true }
             KeyEvent.KEYCODE_BACK -> { goBack(); true }
             else -> super.dispatchKeyEvent(event)
@@ -499,8 +459,11 @@ class InboxGlassesActivity : AppCompatActivity() {
     }
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
-        override fun onSingleTapUp(e: MotionEvent): Boolean { activate(); return true }
-        override fun onLongPress(e: MotionEvent) { goBack() }
+        // Use onSingleTapConfirmed (not onSingleTapUp): it waits out the
+        // double-tap timeout so a double-tap-back never fires a stray activate()
+        // first. Long-press is intentionally unused — Hi Rokid captures it and
+        // it is not part of the R08 tap/tap-tap/fling input model.
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean { activate(); return true }
         override fun onDoubleTap(e: MotionEvent): Boolean { goBack(); return true }
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
             val dy = e2.y - (e1?.y ?: e2.y)
@@ -903,8 +866,9 @@ class InboxGlassesActivity : AppCompatActivity() {
         private const val REQ_PERMS = 4001
         private const val MSG_LIMIT = 20
         private const val MSG_CHAR_CAP = 200
-        private const val CONV_LINE_BUDGET = 13
-        private const val CONV_CHARS_PER_LINE = 32
+        // Raw keycodes the R08 ring emits for forward/back navigation.
+        private const val RING_NEXT = 183
+        private const val RING_PREV = 184
         private val SPINNER = listOf("|", "/", "-", "\\")
         private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
