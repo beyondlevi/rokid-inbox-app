@@ -12,6 +12,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewTreeObserver
+import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
@@ -103,6 +104,28 @@ class InboxHudView @JvmOverloads constructor(
 
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(ev: MotionEvent): Boolean = false
+
+        // Refuse accessibility scroll actions: the R08 bridge would otherwise
+        // page-scroll this container directly, bypassing the Activity's
+        // selection model (the selection would sit still while the page moved).
+        // All scrolling here is programmatic (keep-selection-visible).
+        override fun performAccessibilityAction(action: Int, arguments: android.os.Bundle?): Boolean {
+            if (action == android.R.id.accessibilityActionScrollDown ||
+                action == android.R.id.accessibilityActionScrollUp ||
+                action == AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ||
+                action == AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
+            ) {
+                return false
+            }
+            return super.performAccessibilityAction(action, arguments)
+        }
+
+        override fun onInitializeAccessibilityNodeInfo(info: AccessibilityNodeInfo) {
+            super.onInitializeAccessibilityNodeInfo(info)
+            info.isScrollable = false
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD)
+            info.removeAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD)
+        }
     }
 
     private fun passiveScroll(content: View): ScrollView = PassiveScrollView(context).apply {

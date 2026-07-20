@@ -445,17 +445,50 @@ class InboxGlassesActivity : AppCompatActivity() {
         return super.onTouchEvent(event)
     }
 
+    // Timestamp of the last accepted nav move, for the gesture debounce below.
+    private var lastNavAt = 0L
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action != KeyEvent.ACTION_DOWN) return super.dispatchKeyEvent(event)
         return when (event.keyCode) {
-            // DPAD/VOLUME plus the raw R08 ring navigation keycodes (183 = next,
-            // 184 = prev) the Access Bridge / ring emits in Stable mode.
-            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_VOLUME_DOWN, RING_NEXT -> { moveSelection(1); true }
-            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_VOLUME_UP, RING_PREV -> { moveSelection(-1); true }
-            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_BUTTON_A -> { activate(); true }
+            // Full R08 ring key set (RokidPipe reference). One physical ring
+            // gesture can emit two of these, so nav is debounced.
+            KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_RIGHT,
+            KeyEvent.KEYCODE_VOLUME_DOWN, RING_NEXT -> { nav(1); true }
+            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_VOLUME_UP, RING_PREV -> { nav(-1); true }
+            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER, KeyEvent.KEYCODE_SPACE,
+            KeyEvent.KEYCODE_BUTTON_A, RING_SELECT -> { activate(); true }
             KeyEvent.KEYCODE_BACK -> { goBack(); true }
             else -> super.dispatchKeyEvent(event)
         }
+    }
+
+    /** The ring may present its axis as generic scroll (rotary) motion instead
+     *  of key events; capture it here, move the selection, and consume it so the
+     *  ScrollView never scrolls a page on its own. */
+    override fun onGenericMotionEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_SCROLL) {
+            val v = event.getAxisValue(MotionEvent.AXIS_VSCROLL)
+            val h = event.getAxisValue(MotionEvent.AXIS_HSCROLL)
+            val axis = if (v != 0f) v else h
+            if (axis != 0f) { nav(if (axis < 0f) 1 else -1); return true }
+        }
+        return super.onGenericMotionEvent(event)
+    }
+
+    /** Move the selection for a ring gesture. The R08 ring reports its axis
+     *  inverted relative to list order (swipe down should move the selection
+     *  down, i.e. to a higher index), so normalize the sign here; this is the
+     *  single choke point for the key, generic-scroll and synthesized-fling ring
+     *  paths. A single gesture can emit two events, so collapse repeats within
+     *  [NAV_DEBOUNCE_MS] into one move. */
+    private fun nav(delta: Int) {
+        val now = android.os.SystemClock.uptimeMillis()
+        if (now - lastNavAt < NAV_DEBOUNCE_MS) return
+        lastNavAt = now
+        moveSelection(-delta)
     }
 
     private inner class GestureListener : GestureDetector.SimpleOnGestureListener() {
@@ -468,7 +501,10 @@ class InboxGlassesActivity : AppCompatActivity() {
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, vx: Float, vy: Float): Boolean {
             val dy = e2.y - (e1?.y ?: e2.y)
             if (kotlin.math.abs(dy) < 40) return false
-            moveSelection(if (dy > 0) 1 else -1)
+            // The R08 ring presents its swipe as a synthesized temple fling whose
+            // dy is inverted vs the physical gesture, so it goes through the same
+            // nav() normalization as the key/scroll paths.
+            nav(if (dy > 0) 1 else -1)
             return true
         }
     }
@@ -866,9 +902,12 @@ class InboxGlassesActivity : AppCompatActivity() {
         private const val REQ_PERMS = 4001
         private const val MSG_LIMIT = 20
         private const val MSG_CHAR_CAP = 200
-        // Raw keycodes the R08 ring emits for forward/back navigation.
+        // Raw keycodes the R08 ring may emit for navigation / select.
         private const val RING_NEXT = 183
         private const val RING_PREV = 184
+        private const val RING_SELECT = 202
+        // Collapse the twin event one ring gesture can emit into a single move.
+        private const val NAV_DEBOUNCE_MS = 220L
         private val SPINNER = listOf("|", "/", "-", "\\")
         private val TIME_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM HH:mm")
         private val CLOCK_FMT: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
