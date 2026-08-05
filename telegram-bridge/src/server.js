@@ -76,6 +76,15 @@ app.post('/sendVoice', async (req, res) => {
   } catch (e) { fail(res, e) }
 })
 
+app.post('/sendImage', async (req, res) => {
+  if (!requireBridge(res)) return
+  try {
+    const buf = Buffer.from(req.body.imageBase64 || '', 'base64')
+    await bridge.sendImage(req.body.chatId, buf, req.body.caption || '', req.body.replyToId || '')
+    ok(res, { ok: true })
+  } catch (e) { fail(res, e) }
+})
+
 app.post('/sendReaction', async (req, res) => {
   if (!requireBridge(res)) return
   try {

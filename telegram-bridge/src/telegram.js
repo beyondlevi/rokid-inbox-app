@@ -80,6 +80,19 @@ class TelegramBridge {
     await this.client.sendFile(dialog.entity, opts)
   }
 
+  async sendImage(chatId, buffer, caption, replyToId) {
+    await this.connect()
+    const dialog = await this.resolveDialog(chatId)
+    if (!dialog) throw new Error('Chat not found')
+    // .jpg name lets GramJS infer image/jpeg; forceDocument:false sends it as a
+    // compressed photo (MessageMediaPhoto) rather than a file attachment.
+    const file = new CustomFile('photo.jpg', buffer.length, '', buffer)
+    const opts = { file, forceDocument: false }
+    if (caption) opts.caption = caption
+    if (replyToId) opts.replyTo = parseInt(replyToId, 10)
+    await this.client.sendFile(dialog.entity, opts)
+  }
+
   async sendReaction(chatId, messageId, emoji) {
     await this.connect()
     const dialog = await this.resolveDialog(chatId)
